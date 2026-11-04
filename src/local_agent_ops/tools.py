@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import fnmatch
+import os
 import shlex
 import subprocess
 from collections.abc import Callable
@@ -14,6 +15,9 @@ BLOCKED_GIT = {"push", "reset", "clean", "rebase", "commit"}
 BLOCKED_GIT_FLAGS = {"-C", "--git-dir", "--work-tree"}  # would point git at another repository
 MAX_OUTPUT = 4000
 MAX_READ = 100_000
+# Python's .pyc cache trusts file size + mtime (1s). An edit of the same size in the same second
+# would otherwise run the stale cached code, so commands the agent runs never write bytecode.
+NO_BYTECODE = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
 
 Approver = Callable[[str], bool]
 
@@ -100,7 +104,7 @@ class Workspace:
             return f"DRY RUN: would run `{command}`."
         if not self.approve(f"Run `{command}`?"):
             return "User rejected this command."
-        result = subprocess.run(argv, cwd=self.root, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(argv, cwd=self.root, capture_output=True, text=True, timeout=120, env=NO_BYTECODE)
         return f"exit={result.returncode}\n{(result.stdout + result.stderr)[-MAX_OUTPUT:]}"
 
     def _outside_paths(self, args: list[str]) -> list[str]:

@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 from .agent import Chat, run_agent
 from .tools import Workspace
+from .tools import NO_BYTECODE
 from .trace import Trace
 
 TEST_FILES = ("test_*.py", "*_test.py", "tests/*")
@@ -26,7 +27,7 @@ def count_failures(output: str, exit_code: int) -> int | None:
 
 
 def run_tests(workspace: Workspace, test_cmd: str) -> tuple[int, str]:
-    result = subprocess.run(shlex.split(test_cmd), cwd=workspace.root, capture_output=True, text=True, timeout=300)
+    result = subprocess.run(shlex.split(test_cmd), cwd=workspace.root, capture_output=True, text=True, timeout=300, env=NO_BYTECODE)
     return result.returncode, result.stdout + result.stderr
 
 
