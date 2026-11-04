@@ -52,7 +52,7 @@ task ──► agent loop (agent.py) ──► Ollama /api/chat with tool schema
 1. **Agent loop** ([`agent.py`](src/local_agent_ops/agent.py), about 70 lines). It sends the conversation and four tool schemas to Ollama, executes any tool calls, and feeds the results back. It stops when the model answers without a tool call or hits `--max-steps`. Tool errors go back to the model as text instead of crashing the run.
 2. **Minimal-change rules** (the system prompt). Read before editing. Prefer, in order: no change, then existing code, then the standard library, then new code. No new dependencies or unrelated refactors. Run the tests after editing. This follows the "write less code" idea popularised by the Ponytail agent skill.
 3. **Safety layer** ([`tools.py`](src/local_agent_ops/tools.py)):
-   - every path is resolved and refused if it leaves the workspace;
+   - every path is resolved and refused if it leaves the workspace, including path arguments to commands (`cat /etc/passwd`, `grep ~/.ssh`, `git -C /elsewhere`);
    - commands run without a shell, and only `python`, `pytest`, `ls`, `cat`, `grep` and read-only `git` are allowed;
    - `git push/commit/reset/clean/rebase` are blocked;
    - every write and command needs a `y`.
@@ -97,8 +97,9 @@ PYTHONPATH=src python3 benchmark/run.py --only feature --out results-features.js
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-There are 16 unit tests, and none of them need a model, because the model is faked with scripted replies. They cover:
-- the workspace jail, rejected writes and dry runs;
+There are 19 unit tests, and none of them need a model, because the model is faked with scripted replies. They cover:
+- the workspace jail (for both file tools and command arguments), rejected writes and dry runs;
+- refusing to rewrite a file that was too large to read in full;
 - the command allowlist and blocked git commands;
 - tool-error recovery and the step limit;
 - the manifest auditor.
@@ -119,6 +120,6 @@ It exits with code 1 on errors, so it can gate CI.
 - A 9B local model is far weaker than frontier models, so the agent is meant for small, well-tested changes.
 - Approval is the main safety control. `python` is on the allowlist, so an approved command can run arbitrary code. Read each prompt, or use `--dry-run`.
 - The default model is an "abliterated" Qwen variant with its refusal behaviour removed. It's the default because it was the model I already ran locally, and every benchmark number above comes from it. The agent's safety doesn't depend on the model refusing anything: the workspace jail, allowlist and approval gates apply whatever model you run. To use a stock model, pass `--model qwen2.5-coder:7b`.
-- It edits by replacing whole files, which is simple and reviewable but slow on big files.
+- It edits by replacing whole files, which is simple and reviewable but slow on big files. Files over 100,000 characters are read-only to the agent, so a partial read can never be written back.
 
 See [SECURITY.md](SECURITY.md) and [architecture notes](docs/architecture.md).

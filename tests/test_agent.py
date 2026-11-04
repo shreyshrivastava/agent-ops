@@ -52,6 +52,25 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn("Blocked", ws.run_command("git push"))
         self.assertIn("Blocked", ws.run_command("curl http://example.com"))
 
+    def test_command_arguments_cannot_leave_workspace(self) -> None:
+        ws = Workspace(self.root, lambda _: self.fail("should not ask"))
+        for command in ("cat /etc/passwd", "grep -r key ~/.ssh", "cat ../outside.txt",
+                        "grep --file=/etc/hosts x a.py", "git -C /tmp status", "git --git-dir=/tmp/.git log",
+                        "git -c x=y push"):
+            with self.subTest(command=command):
+                self.assertIn("Blocked", ws.run_command(command))
+
+    def test_paths_inside_workspace_are_allowed(self) -> None:
+        self.assertIn("exit=0", Workspace(self.root, lambda _: True).run_command(f"cat {self.root}/a.py"))
+
+    def test_truncated_file_cannot_be_written_back(self) -> None:
+        big = "x = 1\n" * 30_000
+        (self.root / "big.py").write_text(big)
+        ws = Workspace(self.root, lambda _: True)
+        self.assertIn("TRUNCATED", ws.read_file("big.py"))
+        self.assertIn("Refused", ws.write_file("big.py", "x = 2\n"))
+        self.assertEqual((self.root / "big.py").read_text(), big)
+
     def test_runs_allowed_command(self) -> None:
         self.assertIn("exit=0", Workspace(self.root, lambda _: True).run_command("python3 -c \"print(1)\""))
 

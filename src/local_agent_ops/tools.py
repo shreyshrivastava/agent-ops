@@ -10,7 +10,9 @@ from pathlib import Path
 
 ALLOWED_COMMANDS = {"python", "python3", "pytest", "ls", "cat", "grep", "git"}
 BLOCKED_GIT = {"push", "reset", "clean", "rebase", "commit"}
+BLOCKED_GIT_FLAGS = {"-C", "--git-dir", "--work-tree"}  # would point git at another repository
 MAX_OUTPUT = 4000
+MAX_READ = 100_000
 
 Approver = Callable[[str], bool]
 
@@ -21,6 +23,7 @@ class Workspace:
         self.approve = approve
         self.dry_run = dry_run
         self.originals: dict[Path, str] = {}
+        self.partial: set[Path] = set()
 
     def net_lines(self) -> tuple[int, int]:
         """Lines added and removed by the final state of every file the agent wrote, versus where it started."""
@@ -50,10 +53,18 @@ class Workspace:
         return "\n".join(files[:200]) or "(empty)"
 
     def read_file(self, path: str) -> str:
-        return self._path(path).read_text(encoding="utf-8")[:MAX_OUTPUT * 4]
+        target = self._path(path)
+        text = target.read_text(encoding="utf-8")
+        if len(text) <= MAX_READ:
+            return text
+        # Writes replace whole files, so a file the model has only partly seen must never be written back.
+        self.partial.add(target)
+        return text[:MAX_READ] + f"\n\n[TRUNCATED: showing {MAX_READ} of {len(text)} characters. This file is read-only for you.]"
 
     def write_file(self, path: str, content: str) -> str:
         target = self._path(path)
+        if target in self.partial:
+            return f"Refused: {path} is too large to have been read in full, so rewriting it would delete content."
         old = target.read_text(encoding="utf-8") if target.exists() else ""
         diff = list(difflib.unified_diff(old.splitlines(), content.splitlines(), f"a/{path}", f"b/{path}", lineterm=""))
         if not diff:
@@ -74,14 +85,27 @@ class Workspace:
         if not argv or argv[0] not in ALLOWED_COMMANDS:
             return (f"Blocked: only {sorted(ALLOWED_COMMANDS)} are allowed, with no shell operators. "
                     "Commands already run in the workspace root, so never use cd.")
-        if argv[0] == "git" and len(argv) > 1 and argv[1] in BLOCKED_GIT:
-            return f"Blocked: git {argv[1]} is not allowed."
+        if argv[0] == "git" and (blocked := [a for a in argv[1:] if a in BLOCKED_GIT or a.split("=")[0] in BLOCKED_GIT_FLAGS]):
+            return f"Blocked: git {blocked[0]} is not allowed."
+        if outside := self._outside_paths(argv[1:]):
+            return f"Blocked: {outside[0]} is outside the workspace."
         if self.dry_run:
             return f"DRY RUN: would run `{command}`."
         if not self.approve(f"Run `{command}`?"):
             return "User rejected this command."
         result = subprocess.run(argv, cwd=self.root, capture_output=True, text=True, timeout=120)
         return f"exit={result.returncode}\n{(result.stdout + result.stderr)[-MAX_OUTPUT:]}"
+
+    def _outside_paths(self, args: list[str]) -> list[str]:
+        """Arguments (or --flag=value values) that look like paths and resolve outside the workspace."""
+        outside = []
+        for arg in args:
+            value = arg.split("=", 1)[1] if arg.startswith("-") and "=" in arg else arg
+            if value.startswith(("/", "~")) or ".." in value:
+                path = (self.root / Path(value).expanduser()).resolve()
+                if not path.is_relative_to(self.root):
+                    outside.append(arg)
+        return outside
 
 
 TOOL_SCHEMAS = [
