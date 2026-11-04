@@ -1,0 +1,1 @@
+Add a call_with_retry(call, attempts=3) function to gateway.py. It calls call() and returns its result, retrying only on GatewayTimeout up to `attempts` total calls, and re-raising the last error if all attempts fail. CardDeclined must never be retried. Make the tests in test_gateway.py pass. Do not edit the tests.

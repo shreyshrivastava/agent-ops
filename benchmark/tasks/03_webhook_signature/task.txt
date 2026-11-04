@@ -1,0 +1,1 @@
+verify_signature in webhooks.py does not implement HMAC-SHA256 and compares signatures in a timing-unsafe way. Make the tests in test_webhooks.py pass. Do not edit the tests.

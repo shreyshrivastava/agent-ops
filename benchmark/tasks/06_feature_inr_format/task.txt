@@ -1,0 +1,1 @@
+Add a format_inr(paise) function to money.py that formats an integer amount in paise as Indian rupees with lakh/crore digit grouping, for example 12345678 -> "₹1,23,456.78". Make the tests in test_money.py pass. Do not edit the tests.

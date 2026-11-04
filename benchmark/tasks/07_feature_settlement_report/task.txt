@@ -1,0 +1,1 @@
+Add a settlement_report(payments) function to settlements.py that returns the total captured amount in paise for each payment method, e.g. {"upi": 50000, "card": 5000}. Ignore payments that are not captured. Make the tests in test_settlements.py pass. Do not edit the tests.

@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "local-agent-operations-toolkit"
+version = "0.2.0"
+description = "A fully local, approval-gated coding agent (Ollama) that writes the least code needed, plus a manifest auditor."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Project Contributors"}]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+]
+
+[project.scripts]
+agent-ops = "local_agent_ops.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

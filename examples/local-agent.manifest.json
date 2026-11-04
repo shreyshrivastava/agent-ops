@@ -1,0 +1,19 @@
+{
+  "agent": {
+    "name": "Local Operations Assistant",
+    "memory": "local-persistent"
+  },
+  "model": {
+    "provider": "local-openai-compatible",
+    "endpoint": "http://127.0.0.1:11434/v1",
+    "name": "local-model"
+  },
+  "channels": ["web", "messaging"],
+  "controls": {
+    "approval_required_for": [
+      "destructive_operations",
+      "credential_changes",
+      "external_publishing"
+    ]
+  }
+}

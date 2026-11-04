@@ -1,0 +1,125 @@
+{
+  "model": "huihui_ai/qwen3.5-abliterated:9b",
+  "results": [
+    {
+      "task": "06_feature_inr_format",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": false,
+      "added": 26,
+      "removed": 0,
+      "tool_calls": 15,
+      "seconds": 410.6
+    },
+    {
+      "task": "06_feature_inr_format",
+      "mode": "minimal-rules",
+      "run": 1,
+      "passed": false,
+      "added": 31,
+      "removed": 0,
+      "tool_calls": 15,
+      "seconds": 291.3
+    },
+    {
+      "task": "06_feature_inr_format",
+      "mode": "baseline",
+      "run": 0,
+      "passed": false,
+      "added": 44,
+      "removed": 0,
+      "tool_calls": 15,
+      "seconds": 578.2
+    },
+    {
+      "task": "06_feature_inr_format",
+      "mode": "baseline",
+      "run": 1,
+      "passed": false,
+      "added": 26,
+      "removed": 0,
+      "tool_calls": 15,
+      "seconds": 470.2
+    },
+    {
+      "task": "07_feature_settlement_report",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 11,
+      "removed": 0,
+      "tool_calls": 4,
+      "seconds": 68.7
+    },
+    {
+      "task": "07_feature_settlement_report",
+      "mode": "minimal-rules",
+      "run": 1,
+      "passed": true,
+      "added": 11,
+      "removed": 0,
+      "tool_calls": 5,
+      "seconds": 61.5
+    },
+    {
+      "task": "07_feature_settlement_report",
+      "mode": "baseline",
+      "run": 0,
+      "passed": true,
+      "added": 11,
+      "removed": 0,
+      "tool_calls": 5,
+      "seconds": 49.2
+    },
+    {
+      "task": "07_feature_settlement_report",
+      "mode": "baseline",
+      "run": 1,
+      "passed": true,
+      "added": 11,
+      "removed": 0,
+      "tool_calls": 5,
+      "seconds": 41.8
+    },
+    {
+      "task": "08_feature_retry_gateway",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 17,
+      "removed": 0,
+      "tool_calls": 5,
+      "seconds": 58.1
+    },
+    {
+      "task": "08_feature_retry_gateway",
+      "mode": "minimal-rules",
+      "run": 1,
+      "passed": false,
+      "added": 20,
+      "removed": 0,
+      "tool_calls": 16,
+      "seconds": 525.3
+    },
+    {
+      "task": "08_feature_retry_gateway",
+      "mode": "baseline",
+      "run": 0,
+      "passed": false,
+      "added": 21,
+      "removed": 0,
+      "tool_calls": 15,
+      "seconds": 240.0
+    },
+    {
+      "task": "08_feature_retry_gateway",
+      "mode": "baseline",
+      "run": 1,
+      "passed": true,
+      "added": 25,
+      "removed": 0,
+      "tool_calls": 8,
+      "seconds": 113.2
+    }
+  ]
+}

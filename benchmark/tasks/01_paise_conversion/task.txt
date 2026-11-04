@@ -1,0 +1,1 @@
+to_paise in payments.py loses a paisa on some amounts and accepts amounts with more than two decimal places. Make the tests in test_payments.py pass. Do not edit the tests.

@@ -1,0 +1,1 @@
+GST in billing.py must round half-up to the nearest paisa, but it currently uses banker's rounding. Make the tests in test_billing.py pass. Do not edit the tests.

@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+*.session
+*.sqlite*
+coverage.xml
+.coverage
+*.swp
+.DS_Store
+benchmark/last-run*.log
