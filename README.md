@@ -115,6 +115,16 @@ GitHub Actions runs the tests on Python 3.10 and 3.12.
 
 It exits with code 1 on errors, so it can gate CI.
 
+## How this was built
+
+I built this with Claude Code as a pair programmer. My part was:
+- choosing the scope: local-only, approval-gated, and small enough to read in full;
+- defining the safety model and the payments benchmark tasks;
+- running all 32 benchmark runs on my own machine;
+- reviewing the results, including where they didn't support the "less code" claim.
+
+A pre-release review then found two security bugs, a data-loss risk on truncated files and command arguments escaping the workspace. Both were fixed with tests before the project was shared.
+
 ## Limitations
 
 - A 9B local model is far weaker than frontier models, so the agent is meant for small, well-tested changes.
