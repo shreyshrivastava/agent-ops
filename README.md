@@ -60,7 +60,7 @@ Any Ollama model with tool calling works, for example `--model qwen2.5-coder:7b`
 
 <p align="center"><img src="docs/benchmark.svg" alt="Benchmark results: minimal-rules vs baseline" width="760"></p>
 
-8 payments-style tasks, each with failing tests. Every task was run 2 times in each of 2 modes: **minimal-rules** (the system prompt above) and **baseline** (a plain "complete the task" prompt with the same tools and limits). All runs auto-approve, and a run passes only if the **original** test files pass afterwards.
+8 payments-style tasks, each with failing tests. Every task was run 2 times in each of 2 modes: **minimal-rules** (the [minimal-change system prompt](#how-it-works)) and **baseline** (a plain "complete the task" prompt with the same tools and limits). All runs auto-approve, and a run passes only if the **original** test files pass afterwards.
 
 **Model:** `huihui_ai/qwen3.5-abliterated:9b` (Q4_K_M) on a MacBook, run on 2026-11-04. The raw results are in [`benchmark/results-bugfix.json`](benchmark/results-bugfix.json) and [`benchmark/results-features.json`](benchmark/results-features.json).
 
