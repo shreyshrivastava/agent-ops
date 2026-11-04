@@ -21,7 +21,7 @@
 
 agent-ops is a coding agent for your terminal. You describe a task, or point it at failing tests, and it reads your code, edits files and runs your tests until the task is done. Every run is saved, so you can replay what it did afterwards. It uses a model running on your own machine through Ollama, so nothing is sent to a cloud API.
 
-You stay in control the whole time. Before every file write you see a diff, and before every command you see what will run. Nothing happens until you type `y`.
+Before every file write you see a diff, and before every command you see what will run. You approve each one by typing `y`.
 
 <p align="center">
   <img src="docs/demo.png" alt="agent-ops fixing a webhook signature check with a local model" width="820">
@@ -56,7 +56,7 @@ agent-ops code "Add a settlement_report() that totals captured payments by metho
 
 ### Fix failing tests
 
-`agent-ops fix` runs your tests and hands the failures to the agent. Then it runs the tests again. It repeats this for up to 3 rounds. It stops early when the tests pass, or when a round doesn't reduce the number of failing tests. Test files are read-only in this mode, so the agent has to fix the code and can't pass by editing a test.
+`agent-ops fix` runs your tests, hands the failures to the agent, and runs the tests again, for up to 3 rounds. The loop stops early when the tests pass, or when a round doesn't reduce the number of failing tests. Test files are read-only in this mode, so the only way to pass is to fix the code.
 
 ```bash
 agent-ops fix --workspace ~/payments-service
@@ -66,9 +66,9 @@ agent-ops fix --test-cmd "python3 -m pytest -q" --workspace ~/payments-service
 <p align="center">
   <img src="docs/fix-demo.png" alt="agent-ops fix taking a refund module from 2 failing tests to 0" width="820">
 </p>
-<p align="center"><i>A real run. The agent fixed the refund limit, then added a check for zero and negative amounts. It reused the wrong error message for that check, which is the kind of slip the diff prompt lets you catch.</i></p>
+<p align="center"><i>A real run. The agent fixed the refund limit, then added a check for zero and negative amounts. It reused the wrong error message for that check, and the diff prompt shows it before anything is written.</i></p>
 
-I ran `fix` once on each of the 5 bug-fix tasks from the benchmark. It fixed 4 in a single round, in 39 to 124 seconds each. The fifth is described in the next section.
+I ran `fix` once on each of the 5 bug-fix tasks from the benchmark. Four were fixed in a single round, taking 39 to 124 seconds each. The trace of the fifth is in the next section.
 
 ### See what the agent did
 
@@ -79,7 +79,7 @@ agent-ops runs --workspace ~/payments-service          # list past runs
 agent-ops replay 20261104-230435-501157 --workspace ~/payments-service
 ```
 
-The trace explained the one task `fix` couldn't solve. The bug was `int(float("0.29") * 100)` returning 28. The model spotted the float error in its first reply. It then tried `round()`, checked `1.005 * 100` by hand, and added an unrelated `if result < 100` check. It never tried `decimal.Decimal`, which is the standard fix. After 15 steps it hit the step limit, and `fix` stopped because the failure count hadn't dropped.
+That trace shows why `fix` couldn't solve the paise task. The bug was `int(float("0.29") * 100)` returning 28. The model spotted the float error in its first reply. It then tried `round()`, checked `1.005 * 100` by hand, and added an unrelated `if result < 100` check. It never tried `decimal.Decimal`, the usual fix for money in Python. After 15 steps it hit the step limit, and `fix` stopped because the failure count hadn't dropped.
 
 ### Options
 
@@ -156,7 +156,7 @@ The 29 unit tests replace the model with scripted replies, so they run anywhere 
 
 `agent-ops audit examples/local-agent.manifest.json` checks an agent config before you share it. It flags missing sections or approval rules, keys that look like secrets at any depth, and values that look like `sk-`, GitHub, Slack, AWS, JWT or `Bearer` tokens. It exits with code 1 when it finds a problem, so you can use it in CI.
 
-## How this was built
+## Who built it, and with what
 
 I built this with Claude Code as a pair programmer. I chose the scope, defined the safety model, wrote the payments tasks, ran all 32 benchmark runs on my own machine, and reviewed the results, including the ones that didn't support the "less code" idea.
 
