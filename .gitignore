@@ -9,3 +9,4 @@ coverage.xml
 *.swp
 .DS_Store
 benchmark/last-run*.log
+.agent-ops/

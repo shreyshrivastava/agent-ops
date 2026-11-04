@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import fnmatch
 import shlex
 import subprocess
 from collections.abc import Callable
@@ -18,10 +19,11 @@ Approver = Callable[[str], bool]
 
 
 class Workspace:
-    def __init__(self, root: Path, approve: Approver, dry_run: bool = False) -> None:
+    def __init__(self, root: Path, approve: Approver, dry_run: bool = False, read_only: tuple[str, ...] = ()) -> None:
         self.root = root.resolve()
         self.approve = approve
         self.dry_run = dry_run
+        self.read_only = read_only  # glob patterns, e.g. test files during `agent-ops fix`
         self.originals: dict[Path, str] = {}
         self.partial: set[Path] = set()
 
@@ -65,6 +67,11 @@ class Workspace:
         target = self._path(path)
         if target in self.partial:
             return f"Refused: {path} is too large to have been read in full, so rewriting it would delete content."
+        relative = target.relative_to(self.root).as_posix()
+        if relative.split("/")[0] == ".agent-ops":
+            return "Refused: .agent-ops holds this agent's own run traces and cannot be edited."
+        if any(fnmatch.fnmatch(relative, p) or fnmatch.fnmatch(target.name, p) for p in self.read_only):
+            return f"Refused: {path} is read-only in this mode. Fix the code under test, not the test."
         old = target.read_text(encoding="utf-8") if target.exists() else ""
         diff = list(difflib.unified_diff(old.splitlines(), content.splitlines(), f"a/{path}", f"b/{path}", lineterm=""))
         if not diff:

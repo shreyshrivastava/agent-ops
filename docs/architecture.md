@@ -15,6 +15,17 @@ tools.py  Workspace
   - write_file: unified diff → approve → write; originals kept for the net-lines metric
   - run_command: shlex split, no shell, allowlist, blocked git verbs, approve, 120s timeout
 
+trace.py  Trace: one JSONL file per run in <workspace>/.agent-ops/runs/
+  - one event per line (start, model, tool, end), each with "v": 1
+  - keys and tokens masked with the auditor's patterns before writing
+  - .agent-ops/.gitignore ignores everything, and the agent can't write there
+
+agent-ops fix
+        |
+        v
+fix.py    run tests → failures → run_agent (test files read-only) → rerun
+          stops when tests pass, when the failure count doesn't drop, or after --rounds
+
 agent-ops audit <manifest.json>
         |
         v

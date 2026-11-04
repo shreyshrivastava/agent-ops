@@ -13,12 +13,13 @@
 <p align="center">
   <a href="#get-started">Get started</a> ·
   <a href="#what-you-can-do-with-it">Usage</a> ·
+  <a href="#fix-failing-tests">Fix tests</a> ·
   <a href="#how-it-is-built">Design</a> ·
   <a href="#does-it-work">Benchmark</a> ·
   <a href="#limitations">Limitations</a>
 </p>
 
-agent-ops is a coding agent for your terminal. You describe a task, and it reads your code, edits files and runs your tests until the task is done. It uses a model running on your own machine through Ollama, so nothing is sent to a cloud API.
+agent-ops is a coding agent for your terminal. You describe a task, or point it at failing tests, and it reads your code, edits files and runs your tests until the task is done. Every run is saved, so you can replay what it did afterwards. It uses a model running on your own machine through Ollama, so nothing is sent to a cloud API.
 
 You stay in control the whole time. Before every file write you see a diff, and before every command you see what will run. Nothing happens until you type `y`.
 
@@ -53,6 +54,35 @@ agent-ops code "refund() lets partial refunds exceed the captured amount. Fix it
 agent-ops code "Add a settlement_report() that totals captured payments by method." --workspace ~/payments-service
 ```
 
+### Fix failing tests
+
+`agent-ops fix` runs your tests and hands the failures to the agent. Then it runs the tests again. It repeats this for up to 3 rounds. It stops early when the tests pass, or when a round doesn't reduce the number of failing tests. Test files are read-only in this mode, so the agent has to fix the code and can't pass by editing a test.
+
+```bash
+agent-ops fix --workspace ~/payments-service
+agent-ops fix --test-cmd "python3 -m pytest -q" --workspace ~/payments-service
+```
+
+<p align="center">
+  <img src="docs/fix-demo.png" alt="agent-ops fix taking a refund module from 2 failing tests to 0" width="820">
+</p>
+<p align="center"><i>A real run. The agent fixed the refund limit, then added a check for zero and negative amounts. It reused the wrong error message for that check, which is the kind of slip the diff prompt lets you catch.</i></p>
+
+I ran `fix` once on each of the 5 bug-fix tasks from the benchmark. It fixed 4 in a single round, in 39 to 124 seconds each. The fifth is described in the next section.
+
+### See what the agent did
+
+Every `code` and `fix` run saves a trace: one line per step, with the model's reply, each tool call and its result. Traces live in `.agent-ops/runs/` inside the workspace. That folder has its own `.gitignore`, so traces are never committed, and the agent can't edit them. Anything that looks like a key or token is masked before it's written.
+
+```bash
+agent-ops runs --workspace ~/payments-service          # list past runs
+agent-ops replay 20261104-230435-501157 --workspace ~/payments-service
+```
+
+The trace explained the one task `fix` couldn't solve. The bug was `int(float("0.29") * 100)` returning 28. The model spotted the float error in its first reply. It then tried `round()`, checked `1.005 * 100` by hand, and added an unrelated `if result < 100` check. It never tried `decimal.Decimal`, which is the standard fix. After 15 steps it hit the step limit, and `fix` stopped because the failure count hadn't dropped.
+
+### Options
+
 To see what it would do without letting it change anything, add `--dry-run`. To run it with a different model, use `--model`, for example `--model qwen2.5-coder:7b`. Any Ollama model that supports tool calling works.
 
 | Flag | What it does |
@@ -66,7 +96,7 @@ The repo also includes `agent-ops audit`, which checks an agent config file for 
 
 ## How it is built
 
-The whole agent is about 300 lines of standard-library Python, small enough to read in one sitting. The loop is in [`agent.py`](src/local_agent_ops/agent.py), and the tools and safety checks are in [`tools.py`](src/local_agent_ops/tools.py).
+The whole agent is under 500 lines of standard-library Python, small enough to read in one sitting. The loop is in [`agent.py`](src/local_agent_ops/agent.py), the tools and safety checks are in [`tools.py`](src/local_agent_ops/tools.py), `fix` is in [`fix.py`](src/local_agent_ops/fix.py) and traces are in [`trace.py`](src/local_agent_ops/trace.py).
 
 ```text
 task ──► agent loop (agent.py) ──► Ollama /api/chat with tool schemas
@@ -120,7 +150,7 @@ PYTHONPATH=src python3 benchmark/run.py --only feature --out results-features.js
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The 19 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They check the workspace limits, the command allowlist, rejected writes, dry runs, the truncated-file guard, error recovery and the step limit. GitHub Actions runs them on Python 3.10 and 3.12.
+The 29 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They check the workspace limits, the command allowlist, rejected writes, dry runs, the truncated-file guard, error recovery and the step limit. They also cover traces, masking, read-only test files, and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
 
 ## Also included: a config auditor
 

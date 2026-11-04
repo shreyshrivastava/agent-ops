@@ -7,6 +7,7 @@ import urllib.request
 from collections.abc import Callable
 
 from .tools import TOOL_SCHEMAS, Workspace
+from .trace import Trace
 
 DEFAULT_MODEL = "huihui_ai/qwen3.5-abliterated:9b"
 DEFAULT_HOST = "http://127.0.0.1:11434"
@@ -35,14 +36,18 @@ def ollama_chat(model: str = DEFAULT_MODEL, host: str = DEFAULT_HOST) -> Chat:
 
 
 def run_agent(task: str, workspace: Workspace, chat: Chat, max_steps: int = 15,
-              log: Callable[[str], None] = print, system: str = SYSTEM_PROMPT) -> str:
+              log: Callable[[str], None] = print, system: str = SYSTEM_PROMPT, trace: Trace | None = None) -> str:
+    record = trace.event if trace else (lambda kind, **data: None)
     messages = [{"role": "system", "content": system}, {"role": "user", "content": task}]
     for _ in range(max_steps):
         reply = chat(messages)
         messages.append(reply)
         calls = reply.get("tool_calls") or []
+        record("model", content=reply.get("content", ""), tool_calls=len(calls))
         if not calls:
-            return reply.get("content", "").strip()
+            summary = reply.get("content", "").strip()
+            record("end", reason="done", summary=summary)
+            return summary
         for call in calls:
             name = call["function"]["name"]
             args = call["function"].get("arguments") or {}
@@ -54,5 +59,8 @@ def run_agent(task: str, workspace: Workspace, chat: Chat, max_steps: int = 15,
                 result = tool(**args) if tool else f"Unknown tool: {name}"
             except Exception as error:  # report tool errors back to the model instead of crashing
                 result = f"Error: {error}"
+            record("tool", name=name, args=args, result=result)
             messages.append({"role": "tool", "content": result, "tool_name": name})
-    return f"Stopped after {max_steps} steps without finishing."
+    summary = f"Stopped after {max_steps} steps without finishing."
+    record("end", reason="step_limit", summary=summary)
+    return summary
