@@ -1,16 +1,35 @@
-# agent-ops: a local, approval-gated coding agent
+<h1 align="center">agent-ops</h1>
 
-[![CI](https://github.com/shreyshrivastava/agent-ops/actions/workflows/ci.yml/badge.svg)](https://github.com/shreyshrivastava/agent-ops/actions/workflows/ci.yml)
+<p align="center"><b>A coding agent that runs entirely on your laptop, asks before it touches anything, and writes the smallest correct change.</b></p>
 
-A coding agent that runs **entirely on your machine** (Ollama + a 9B Qwen model), asks before every file write and command, and is told to make the **smallest correct change**. It is measured on payments-style tasks instead of being taken on trust.
+<p align="center">
+  <a href="https://github.com/shreyshrivastava/agent-ops/actions/workflows/ci.yml"><img src="https://github.com/shreyshrivastava/agent-ops/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/dependencies-0-brightgreen" alt="Zero dependencies">
+  <img src="https://img.shields.io/badge/runs-100%25%20local-8957e5" alt="Runs 100% local">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT license"></a>
+</p>
 
-- **Fully local.** No cloud API, no keys, no code leaves the laptop. Pure Python standard library, zero dependencies.
-- **Human in the loop.** Every write shows a diff and every command needs approval. There's a command allowlist, a workspace jail, and a `--dry-run` mode.
-- **Measured.** A reproducible benchmark of 8 payments-domain tasks grades every run against the *original* tests, so the agent can't pass by editing them.
+<p align="center">
+  <a href="#quick-start-about-5-minutes">Quick start</a> ·
+  <a href="#benchmark">Benchmark</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#limitations">Limitations</a>
+</p>
 
-![agent-ops fixing a webhook signature check with a local model](docs/demo.png)
+<p align="center">
+  <img src="docs/demo.png" alt="agent-ops fixing a webhook signature check with a local model" width="820">
+</p>
+<p align="center"><i>A real run on Qwen 3.5 9B: the agent replaces an MD5 "signature" with HMAC-SHA256 and a constant-time comparison, asks before each write and command, and reports the net change.</i></p>
 
-*A real run: the agent replaces an MD5 "signature" with HMAC-SHA256 and a constant-time comparison, asks before writing and before running tests, then reports the net line change.*
+## Highlights
+
+- 🔒 **Fully local.** Ollama plus a 9B model. No API keys, and no code leaves the machine.
+- ✋ **Human in the loop.** Every write shows a diff and every command needs a `y`. There's also a `--dry-run` mode.
+- 🧱 **Sandboxed.** A workspace jail covers both files and command arguments. Commands go through an allowlist, and `git push`/`commit`/`reset` are blocked.
+- ✂️ **Minimal-change rules.** Read first, then prefer no change, existing code or the standard library before writing anything new.
+- 📊 **[Measured](#benchmark), not claimed.** 8 payments tasks (paise, GST, webhooks, idempotency, refunds), each graded against the *original* tests.
+- 🪶 **Small enough to read.** About 300 lines of standard-library Python, with 19 tests that run without a model.
 
 ## Quick start (about 5 minutes)
 
@@ -37,28 +56,9 @@ Any Ollama model with tool calling works, for example `--model qwen2.5-coder:7b`
 | `--max-steps N` | Hard stop on runaway loops (default 15) |
 | `--model`, `--host` | Choose the Ollama model and server |
 
-## How it works
-
-```text
-task ──► agent loop (agent.py) ──► Ollama /api/chat with tool schemas
-              ▲                         │ tool_calls
-              │ tool result             ▼
-              └──────────── Workspace (tools.py)
-                            • list_files / read_file      (inside workspace only)
-                            • write_file  → diff → approve → write
-                            • run_command → allowlist → approve → run (120s timeout)
-```
-
-1. **Agent loop** ([`agent.py`](src/local_agent_ops/agent.py), about 70 lines). It sends the conversation and four tool schemas to Ollama, executes any tool calls, and feeds the results back. It stops when the model answers without a tool call or hits `--max-steps`. Tool errors go back to the model as text instead of crashing the run.
-2. **Minimal-change rules** (the system prompt). Read before editing. Prefer, in order: no change, then existing code, then the standard library, then new code. No new dependencies or unrelated refactors. Run the tests after editing. This follows the "write less code" idea popularised by the Ponytail agent skill.
-3. **Safety layer** ([`tools.py`](src/local_agent_ops/tools.py)):
-   - every path is resolved and refused if it leaves the workspace, including path arguments to commands (`cat /etc/passwd`, `grep ~/.ssh`, `git -C /elsewhere`);
-   - commands run without a shell, and only `python`, `pytest`, `ls`, `cat`, `grep` and read-only `git` are allowed;
-   - `git push/commit/reset/clean/rebase` are blocked;
-   - every write and command needs a `y`.
-4. **Net-lines metric.** It diffs the final state of every touched file against its original, so a rewrite counts once.
-
 ## Benchmark
+
+<p align="center"><img src="docs/benchmark.svg" alt="Benchmark results: minimal-rules vs baseline" width="760"></p>
 
 8 payments-style tasks, each with failing tests. Every task was run 2 times in each of 2 modes: **minimal-rules** (the system prompt above) and **baseline** (a plain "complete the task" prompt with the same tools and limits). All runs auto-approve, and a run passes only if the **original** test files pass afterwards.
 
@@ -90,6 +90,27 @@ To reproduce, which takes about 1 hour:
 PYTHONPATH=src python3 benchmark/run.py --runs 2                    # all tasks
 PYTHONPATH=src python3 benchmark/run.py --only feature --out results-features.json
 ```
+
+## How it works
+
+```text
+task ──► agent loop (agent.py) ──► Ollama /api/chat with tool schemas
+              ▲                         │ tool_calls
+              │ tool result             ▼
+              └──────────── Workspace (tools.py)
+                            • list_files / read_file      (inside workspace only)
+                            • write_file  → diff → approve → write
+                            • run_command → allowlist → approve → run (120s timeout)
+```
+
+1. **Agent loop** ([`agent.py`](src/local_agent_ops/agent.py), about 70 lines). It sends the conversation and four tool schemas to Ollama, executes any tool calls, and feeds the results back. It stops when the model answers without a tool call or hits `--max-steps`. Tool errors go back to the model as text instead of crashing the run.
+2. **Minimal-change rules** (the system prompt). Read before editing. Prefer, in order: no change, then existing code, then the standard library, then new code. No new dependencies or unrelated refactors. Run the tests after editing. This follows the "write less code" idea popularised by the Ponytail agent skill.
+3. **Safety layer** ([`tools.py`](src/local_agent_ops/tools.py)):
+   - every path is resolved and refused if it leaves the workspace, including path arguments to commands (`cat /etc/passwd`, `grep ~/.ssh`, `git -C /elsewhere`);
+   - commands run without a shell, and only `python`, `pytest`, `ls`, `cat`, `grep` and read-only `git` are allowed;
+   - `git push/commit/reset/clean/rebase` are blocked;
+   - every write and command needs a `y`.
+4. **Net-lines metric.** It diffs the final state of every touched file against its original, so a rewrite counts once.
 
 ## Tests and CI
 

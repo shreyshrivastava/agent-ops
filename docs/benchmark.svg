@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="230" viewBox="0 0 760 230" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <style>
+    .t { fill: #8b949e; font-size: 13px; }
+    .h { fill: #8b949e; font-size: 12px; font-weight: 600; letter-spacing: .06em; }
+    .v { fill: #8b949e; font-size: 13px; font-weight: 600; }
+    .a { fill: #2f81f7; }
+    .b { fill: #8b949e; opacity: .45; }
+  </style>
+  <rect width="760" height="230" fill="none"/>
+
+  <text class="h" x="20" y="28">BUG FIXES · PASS RATE</text>
+  <text class="t" x="20" y="62">minimal-rules</text><rect class="a" x="130" y="48" width="198" height="20" rx="3"/><text class="v" x="336" y="63">9/10</text>
+  <text class="t" x="20" y="94">baseline</text><rect class="b" x="130" y="80" width="154" height="20" rx="3"/><text class="v" x="292" y="95">7/10</text>
+
+  <text class="h" x="400" y="28">BUG FIXES · AVG TIME (lower is better)</text>
+  <text class="t" x="400" y="62">minimal-rules</text><rect class="a" x="510" y="48" width="108" height="20" rx="3"/><text class="v" x="626" y="63">108s</text>
+  <text class="t" x="400" y="94">baseline</text><rect class="b" x="510" y="80" width="200" height="20" rx="3"/><text class="v" x="716" y="95">200s</text>
+
+  <text class="h" x="20" y="148">FEATURES · AVG LINES CHANGED (lower is better)</text>
+  <text class="t" x="20" y="182">minimal-rules</text><rect class="a" x="130" y="168" width="168" height="20" rx="3"/><text class="v" x="306" y="183">19.3</text>
+  <text class="t" x="20" y="214">baseline</text><rect class="b" x="130" y="200" width="200" height="20" rx="3"/><text class="v" x="338" y="215">23.0</text>
+
+  <text class="h" x="400" y="148">FEATURES · PASS RATE</text>
+  <text class="t" x="400" y="182">minimal-rules</text><rect class="a" x="510" y="168" width="110" height="20" rx="3"/><text class="v" x="628" y="183">3/6</text>
+  <text class="t" x="400" y="214">baseline</text><rect class="b" x="510" y="200" width="110" height="20" rx="3"/><text class="v" x="628" y="215">3/6</text>
+</svg>
