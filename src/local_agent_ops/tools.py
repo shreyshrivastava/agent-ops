@@ -6,6 +6,7 @@ import difflib
 import fnmatch
 import os
 import shlex
+import ast
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -38,6 +39,8 @@ class Workspace:
         self.decisions: list[dict] = []  # decisions the agent recorded, flushed to DECISIONS.md by the loop
         self.attempt: dict[Path, str] = {}  # file contents before the current approach, for undoing it
         self.stale: set[Path] = set()  # files whose contents were trimmed from the model's context
+        self.done_when: list[str] = []  # what "done" means for this task, set by the agent
+        self.check_command = ""  # a command that must pass before the agent may finish
 
     def net_lines(self) -> tuple[int, int]:
         """Lines added and removed by the final state of every file the agent wrote, versus where it started."""
@@ -90,6 +93,16 @@ class Workspace:
         done = sum(item["status"] == "done" for item in plan)
         return f"Plan updated ({done}/{len(plan)} done)."
 
+    def set_done_criteria(self, criteria: list, check_command: str = "") -> str:
+        """Define what done means, and optionally a command (usually the tests) that must pass before finishing."""
+        criteria = [str(c).strip() for c in criteria or [] if str(c).strip()]
+        if not criteria:
+            return "Error: give at least one concrete, checkable criterion."
+        if check_command and shlex.split(check_command)[0] not in ALLOWED_COMMANDS:
+            return f"Error: check_command must start with one of {sorted(ALLOWED_COMMANDS)}."
+        self.done_when, self.check_command = criteria, check_command.strip()
+        return f"Done criteria set ({len(criteria)}){'; check: ' + self.check_command if self.check_command else ''}."
+
     def record_decision(self, decision: str, why: str) -> str:
         if not decision.strip() or not why.strip():
             return "Error: give both the decision and why."
@@ -138,6 +151,11 @@ class Workspace:
             return "No change."
         added = sum(1 for line in diff if line.startswith("+") and not line.startswith("+++"))
         removed = sum(1 for line in diff if line.startswith("-") and not line.startswith("---"))
+        if target.suffix == ".py":  # pre-write check: never write Python that does not parse
+            try:
+                ast.parse(content)
+            except SyntaxError as error:
+                return f"Refused: the new {path} would not parse (line {error.lineno}: {error.msg}). Fix the edit and try again."
         if limit and self.max_diff and old and added + removed > self.max_diff:
             return (f"Refused: this edit changes {added + removed} lines of {path}; the limit is {self.max_diff}. "
                     "Make the smallest change that fixes the problem: touch only the lines that are wrong, "
@@ -195,6 +213,9 @@ TOOL_SCHEMAS = [
         "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "old": {"type": "string"}, "new": {"type": "string"},
             "reason": {"type": "string", "description": "What this change does and why it is needed."}},
             "required": ["path", "old", "new", "reason"]}}},
+    {"type": "function", "function": {"name": "set_done_criteria", "description": "Before editing, define what done means: concrete checks, and a command (usually the tests) that must pass. You cannot finish until it passes and every plan step is done.",
+        "parameters": {"type": "object", "properties": {"criteria": {"type": "array", "items": {"type": "string"}},
+            "check_command": {"type": "string", "description": "e.g. python3 -m unittest"}}, "required": ["criteria"]}}},
     {"type": "function", "function": {"name": "record_decision", "description": "Log an important decision (an approach chosen, an option rejected) and why, in the project's decision log.",
         "parameters": {"type": "object", "properties": {"decision": {"type": "string"}, "why": {"type": "string"}}, "required": ["decision", "why"]}}},
     {"type": "function", "function": {"name": "run_command", "description": "Run an allowlisted command (python, pytest, ls, cat, grep, read-only git) in the workspace.",

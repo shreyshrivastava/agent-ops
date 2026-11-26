@@ -15,7 +15,8 @@ DEFAULT_HOST = "http://127.0.0.1:11434"
 
 SYSTEM_PROMPT = """You are a careful local coding agent working inside one repository.
 Write the least code that correctly solves the task:
-0. Start by calling update_plan with short steps. Mark each step done as you finish it, so the
+0. Start with set_done_criteria (what done means, and the test command that proves it), then
+   update_plan with short steps. Mark each step done as you finish it, so the
    next run knows what is already done if you run out of steps.
 1. Read the relevant files before changing anything. To debug, reproduce the failure first,
    find the root cause, then fix that cause rather than the symptom.
@@ -81,6 +82,16 @@ def switch_approach(workspace: Workspace, progress: Progress | None, start: int,
             "call record_decision with the new approach and why it should work, then make the smallest change.")
 
 
+def _not_done(workspace: Workspace) -> str:
+    """Why the task is not finished yet, or "" if every plan step is done and the check command passes."""
+    gaps = [f"plan step not done: {item['step']}" for item in workspace.plan if item["status"] != "done"]
+    if workspace.check_command and not gaps:
+        result = workspace.run_command(workspace.check_command)
+        if result.startswith("exit=") and not result.startswith("exit=0"):  # a refused or dry run can't block finishing
+            gaps.append(f"`{workspace.check_command}` does not pass:\n{result[-1500:]}")
+    return "\n".join(gaps)
+
+
 def _trim(messages: list[dict], workspace: Workspace, read_paths: dict[int, str]) -> None:
     """Shorten old tool results so long runs don't resend everything. Trimmed files must be re-read before a rewrite."""
     tools = [i for i, m in enumerate(messages) if m.get("role") == "tool"]
@@ -105,6 +116,7 @@ def run_agent(task: str, workspace: Workspace, chat: Chat, max_steps: int = 15,
     allowed = {t["function"]["name"] for t in TOOL_SCHEMAS} if tools is None else tools
     if progress:
         workspace.plan = [dict(item) for item in progress.plan]
+        workspace.done_when, workspace.check_command = list(progress.done_when), progress.check_command
     briefing = progress.briefing() if progress else ""
     messages = [{"role": "system", "content": system},
                 {"role": "user", "content": f"{task}\n\n{briefing}" if briefing else task}]
@@ -120,6 +132,7 @@ def run_agent(task: str, workspace: Workspace, chat: Chat, max_steps: int = 15,
             for c in workspace.changes[logged_changes:]:
                 progress.decide(f"Changed {c['path']} (+{c['added']} -{c['removed']})", c["reason"] or "no reason given")
             progress.plan = workspace.plan
+            progress.done_when, progress.check_command = workspace.done_when, workspace.check_command
             progress.changes[finished:] = workspace.changes[start:]
             progress.save()
         logged_decisions, logged_changes = len(workspace.decisions), len(workspace.changes)
@@ -136,6 +149,11 @@ def run_agent(task: str, workspace: Workspace, chat: Chat, max_steps: int = 15,
         calls = reply.get("tool_calls") or []
         record("model", content=reply.get("content", ""), tool_calls=len(calls))
         if not calls:
+            if gaps := _not_done(workspace):  # completion gate: no finishing until done is proven
+                record("gate", gaps=gaps)
+                log(f"✗ not done yet: {gaps.splitlines()[0]}")
+                messages.append({"role": "user", "content": f"You are not done yet:\n{gaps}\nKeep working until this is fixed."})
+                continue
             return end("done", reply.get("content", "").strip())
         switch = ""
         for call in calls:

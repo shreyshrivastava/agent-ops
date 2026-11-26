@@ -84,6 +84,14 @@ Inside any run, if the same command (usually your tests) still fails twice after
 - An edit that changes more than 40 lines of an existing file is refused, and the agent is told to touch only the lines that are wrong. Change the limit with `--max-diff`, or set it to 0 to turn it off.
 - Old tool output is trimmed after a few steps, so long runs don't resend every file. A file trimmed this way can't be rewritten whole until the agent reads it again.
 
+### It knows what done looks like
+
+Before editing, the agent writes down what "done" means for the task and which command proves it, usually your tests. If it tries to finish while a plan step is still open, or while that command fails, the loop sends it back to work with the reason, until it finishes or runs out of steps. If you decline to run the check command, it can still finish. The done criteria are saved with the rest of its memory.
+
+### Checks before every edit
+
+An edit is written only after it passes these checks, in this order: Python files must still parse, the edit must stay under the line limit, test files stay read-only in `fix`, and you approve the diff and the reason.
+
 ### Decision log
 
 `.agent-ops/DECISIONS.md` is a running, human-readable log of what the agent decided and why: each task it started, each change with its reason, decisions it recorded with the `record_decision` tool, abandoned approaches and the error that ended them, and which round fixed the tests. It is kept across tasks and runs. Like the traces, it isn't committed.

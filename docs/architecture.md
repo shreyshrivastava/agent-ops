@@ -29,6 +29,9 @@ progress.py  Progress: .agent-ops/progress.json — the plan (update_plan tool) 
 agent.py  retries: the same command failing RETRY_LIMIT (2) times after edits → switch_approach
           (record, undo, ask for a different approach); MAX_APPROACHES (3) failed approaches → give up
           tokens: tool results older than the last 6 are trimmed; trimmed files can't be rewritten whole
+agent.py  completion gate: a plain reply ends the run only when every plan step is done and the
+          set_done_criteria check command passes; otherwise the gaps go back to the model
+tools.py  pre-write checks: Python must parse (ast), --max-diff, read-only tests, then approval
 tools.py  edit_file (exact unique snippet) is the default edit; edits over --max-diff lines are refused
 
 agent-ops explain <file | run>

@@ -185,3 +185,51 @@ class RetryAndMinimalTests(unittest.TestCase):
         fix_tests(Workspace(self.root, lambda _: True), lambda m: seen.append(m) or replies.pop(0), log=lambda _: None)
         self.assertIn("FAILED", seen[0][1]["content"])
         self.assertIn("Round 1 fixed the tests", Progress(self.root).log_path.read_text())
+
+
+class DoneAndCheckTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        (self.root / "calc.py").write_text(BUGGY)
+        (self.root / "test_calc.py").write_text(TEST)
+
+    def tearDown(self) -> None:
+        self.dir.cleanup()
+
+    def test_cannot_finish_until_check_command_passes(self) -> None:
+        replies = [_call("set_done_criteria", criteria=["add returns the sum"], check_command="python3 -m unittest"),
+                   _done("all done"),  # premature: tests still fail
+                   _call("edit_file", path="calc.py", old="a - b", new="a + b", reason="add, not subtract"),
+                   _done("fixed")]
+        seen = []
+        result = run_agent("fix", Workspace(self.root, lambda _: True), lambda m: seen.append(list(m)) or replies.pop(0),
+                           log=lambda _: None)
+        self.assertEqual(result, "fixed")
+        self.assertIn("not done yet", seen[2][-1]["content"])
+
+    def test_cannot_finish_with_open_plan_steps(self) -> None:
+        replies = [_call("update_plan", steps=[{"step": "fix add", "status": "pending"}]), _done("done?"),
+                   _call("update_plan", steps=[{"step": "fix add", "status": "done"}]), _done("done")]
+        seen = []
+        run_agent("t", Workspace(self.root, lambda _: True), lambda m: seen.append(list(m)) or replies.pop(0), log=lambda _: None)
+        self.assertIn("plan step not done: fix add", seen[2][-1]["content"])
+
+    def test_rejected_check_does_not_trap_the_agent(self) -> None:
+        workspace = Workspace(self.root, lambda prompt: not prompt.startswith("Run"))
+        replies = [_call("set_done_criteria", criteria=["x"], check_command="python3 -m unittest"), _done("ok")]
+        self.assertEqual(run_agent("t", workspace, lambda m: replies.pop(0), log=lambda _: None), "ok")
+
+    def test_python_that_does_not_parse_is_never_written(self) -> None:
+        result = Workspace(self.root, lambda _: True).edit_file("calc.py", "a - b", "a +", reason="typo")
+        self.assertIn("would not parse", result)
+        self.assertEqual((self.root / "calc.py").read_text(), BUGGY)
+
+    def test_done_criteria_are_remembered(self) -> None:
+        progress = Progress(self.root)
+        progress.begin("t")
+        replies = [_call("set_done_criteria", criteria=["sum is right"])]
+        run_agent("t", Workspace(self.root, lambda _: True), lambda m: replies[0], max_steps=1, log=lambda _: None, progress=progress)
+        saved = Progress(self.root)
+        saved.begin("t")
+        self.assertIn("sum is right", saved.briefing())

@@ -20,12 +20,14 @@ class Progress:
         self.path = root / TRACE_DIR / "progress.json"
         self.log_path = root / TRACE_DIR / "DECISIONS.md"  # append-only, kept across tasks
         self.task, self.plan, self.changes, self.notes, self.failed = "", [], [], [], []
+        self.done_when, self.check_command = [], ""
         if self.path.exists():
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
                 self.task, self.plan = data.get("task", ""), data.get("plan", [])
                 self.changes, self.notes = data.get("changes", []), data.get("notes", [])
                 self.failed = data.get("failed_approaches", [])
+                self.done_when, self.check_command = data.get("done_when", []), data.get("check_command", "")
             except (json.JSONDecodeError, AttributeError):
                 pass  # a corrupt file is treated as no memory
 
@@ -33,6 +35,7 @@ class Progress:
         """Start or continue `task`. Returns True when earlier progress on the same task is being resumed."""
         if fresh or task != self.task:
             self.task, self.plan, self.changes, self.notes, self.failed = task, [], [], [], []
+            self.done_when, self.check_command = [], ""
             self.decide(f"Started task: {task}", "fresh start" if fresh else "new task")
             return False
         return bool(self.plan or self.changes or self.notes or self.failed)
@@ -59,6 +62,10 @@ class Progress:
         if not (self.plan or self.changes or self.notes or self.failed):
             return ""
         lines = ["Progress from earlier runs on this task (already applied to the files):"]
+        if self.done_when:
+            lines += ["Done when:"] + [f"  - {c}" for c in self.done_when]
+            if self.check_command:
+                lines.append(f"  - `{self.check_command}` passes")
         if self.plan:
             lines += ["Plan:"] + [f"  [{item['status']}] {item['step']}" for item in self.plan]
         if self.changes:  # only the latest, to keep the prompt small
@@ -76,7 +83,7 @@ class Progress:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         (self.path.parent / ".gitignore").write_text("*\n", encoding="utf-8")
         data = {"task": self.task, "plan": self.plan, "changes": self.changes, "notes": self.notes,
-                "failed_approaches": self.failed}
+                "failed_approaches": self.failed, "done_when": self.done_when, "check_command": self.check_command}
         self.path.write_text(json.dumps(mask(data), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
