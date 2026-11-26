@@ -110,3 +110,78 @@ class ExplainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RetryAndMinimalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+        (self.root / "calc.py").write_text(BUGGY)
+        (self.root / "test_calc.py").write_text(TEST)
+
+    def tearDown(self) -> None:
+        self.dir.cleanup()
+
+    def test_same_error_twice_undoes_the_approach_and_asks_for_another(self) -> None:
+        replies = [_call("edit_file", path="calc.py", old="a - b", new="a * b", reason="try multiply"),
+                   _call("run_command", command="python3 -m unittest"),
+                   _call("run_command", command="python3 -m unittest"),
+                   _call("edit_file", path="calc.py", old="a - b", new="a + b", reason="add, not subtract"),
+                   _call("run_command", command="python3 -m unittest"), _done()]
+        seen = []
+        progress = Progress(self.root)
+        progress.begin("fix add")
+        workspace = Workspace(self.root, lambda _: True)
+        run_agent("fix add", workspace, lambda m: seen.append(list(m)) or replies.pop(0), log=lambda _: None, progress=progress)
+        switch_message = seen[3][-1]
+        self.assertEqual(switch_message["role"], "user")
+        self.assertIn("different", switch_message["content"])
+        self.assertIn("try multiply", switch_message["content"])
+        self.assertEqual((self.root / "calc.py").read_text(), FIXED)  # the multiply edit was undone, then the real fix made
+        self.assertEqual(Progress(self.root).failed[0]["approach"], "calc.py: try multiply")
+        log = progress.log_path.read_text()
+        self.assertIn("Abandoned approach #1", log)
+        self.assertIn("add, not subtract", log)
+
+    def test_gives_up_after_max_approaches(self) -> None:
+        def chat(messages):
+            n = len(messages)
+            return (_call("write_file", path="calc.py", content=f"def add(a, b):\n    return {n}\n", reason=f"guess {n}")
+                    if n % 3 == 2 else _call("run_command", command="python3 -m unittest"))
+        progress = Progress(self.root)
+        progress.begin("fix add")
+        result = run_agent("fix add", Workspace(self.root, lambda _: True), chat, max_steps=40, log=lambda _: None,
+                           progress=progress, max_approaches=2)
+        self.assertIn("2 different approaches", result)
+        self.assertEqual(len(Progress(self.root).failed), 2)
+        self.assertEqual((self.root / "calc.py").read_text(), BUGGY)
+
+    def test_large_edits_are_refused(self) -> None:
+        workspace = Workspace(self.root, lambda _: True, max_diff=3)
+        result = workspace.write_file("calc.py", "".join(f"x{i} = {i}\n" for i in range(10)), reason="rewrite")
+        self.assertIn("smallest change", result)
+        self.assertEqual((self.root / "calc.py").read_text(), BUGGY)
+        self.assertTrue(workspace.edit_file("calc.py", "a - b", "a + b", reason="fix").startswith("Wrote"))
+
+    def test_edit_file_needs_a_unique_match(self) -> None:
+        workspace = Workspace(self.root, lambda _: True)
+        self.assertIn("matched 0 times", workspace.edit_file("calc.py", "nope", "x"))
+        self.assertIn("matched 2 times", workspace.edit_file("calc.py", "b", "x"))
+
+    def test_old_tool_output_is_trimmed_and_marks_files_stale(self) -> None:
+        (self.root / "big.py").write_text("y = 1\n" * 200)
+        replies = [_call("read_file", path="big.py")] + [_call("list_files")] * 7 + [_done()]
+        seen = []
+        workspace = Workspace(self.root, lambda _: True)
+        run_agent("look", workspace, lambda m: seen.append([dict(x) for x in m]) or replies.pop(0), log=lambda _: None)
+        self.assertIn("trimmed", seen[-1][3]["content"])
+        self.assertIn("trimmed from memory", workspace.write_file("big.py", "y = 2\n"))
+
+    def test_memory_and_decisions_survive_between_fix_runs(self) -> None:
+        fix_tests(Workspace(self.root, lambda _: True), lambda m: _done("no idea"), rounds=2, log=lambda _: None)
+        self.assertEqual(len(Progress(self.root).failed), 1)
+        seen = []
+        replies = [_call("edit_file", path="calc.py", old="a - b", new="a + b", reason="add, not subtract"), _done()]
+        fix_tests(Workspace(self.root, lambda _: True), lambda m: seen.append(m) or replies.pop(0), log=lambda _: None)
+        self.assertIn("FAILED", seen[0][1]["content"])
+        self.assertIn("Round 1 fixed the tests", Progress(self.root).log_path.read_text())

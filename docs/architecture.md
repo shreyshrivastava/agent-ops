@@ -23,6 +23,14 @@ trace.py  Trace: one JSONL file per run in <workspace>/.agent-ops/runs/
 progress.py  Progress: .agent-ops/progress.json — the plan (update_plan tool) and every change with its reason
   - saved after every step; the next fix round, or a re-run of the same `code` task, is briefed from it
 
+  - failed_approaches: an approach is abandoned after RETRY_LIMIT failures; its edits are undone and it is
+    never retried. DECISIONS.md is an append-only log of every decision and why.
+
+agent.py  retries: the same command failing RETRY_LIMIT (2) times after edits → switch_approach
+          (record, undo, ask for a different approach); MAX_APPROACHES (3) failed approaches → give up
+          tokens: tool results older than the last 6 are trimmed; trimmed files can't be rewritten whole
+tools.py  edit_file (exact unique snippet) is the default edit; edits over --max-diff lines are refused
+
 agent-ops explain <file | run>
   - file: run_agent with EXPLAIN_PROMPT and only read_file/list_files exposed
   - run:  trace.explain_run lists the plan and each write with its reason, no model needed

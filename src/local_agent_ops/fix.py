@@ -7,7 +7,7 @@ import shlex
 import subprocess
 from collections.abc import Callable
 
-from .agent import Chat, run_agent
+from .agent import MAX_APPROACHES, RETRY_LIMIT, Chat, run_agent, switch_approach
 from .progress import Progress
 from .tools import Workspace
 from .tools import NO_BYTECODE
@@ -32,15 +32,21 @@ def run_tests(workspace: Workspace, test_cmd: str) -> tuple[int, str]:
     return result.returncode, result.stdout + result.stderr
 
 
-def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unittest", rounds: int = 3,
-              max_steps: int = 15, model: str = "", log: Callable[[str], None] = print) -> dict:
+def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unittest", rounds: int = 6,
+              max_steps: int = 15, model: str = "", log: Callable[[str], None] = print, fresh: bool = False,
+              retry_limit: int = RETRY_LIMIT, max_approaches: int = MAX_APPROACHES) -> dict:
+    """Rounds of: agent fixes → tests rerun. After `retry_limit` rounds without fewer failures, the approach is
+    recorded as failed, its edits are undone, and the next round must try another way. Stops when the tests
+    pass, after `max_approaches` failed approaches, or after `rounds`."""
     code, output = run_tests(workspace, test_cmd)
     failing = count_failures(output, code)
     history = [failing]
     log(f"tests: {_describe(failing)}")
     reason, traces = ("already passing" if code == 0 else "rounds used up"), []
     progress = Progress(workspace.root)
-    progress.begin(f"fix: {test_cmd}", fresh=True)  # memory carries across this run's rounds, not between runs
+    if progress.begin(f"fix: {test_cmd}", fresh=fresh):  # memory is kept across runs unless fresh
+        log(f"resuming: {len(progress.changes)} earlier changes, {len(progress.failed)} failed approaches")
+    best, stuck, attempt_start = failing, 0, 0
 
     for number in range(1, rounds + 1):
         if code == 0:
@@ -50,7 +56,8 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
                 f"Test output (last part):\n{output[-MAX_FAILURE_OUTPUT:]}")
         trace = Trace(workspace.root, task, model)
         traces.append(trace.path.name)
-        run_agent(task, workspace, chat, max_steps, log=log, trace=trace, progress=progress)
+        run_agent(task, workspace, chat, max_steps, log=log, trace=trace, progress=progress,
+                  retry_limit=retry_limit, max_approaches=max_approaches)
         previous = failing
         code, output = run_tests(workspace, test_cmd)
         failing = count_failures(output, code)
@@ -60,9 +67,20 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
         log(f"tests: {_describe(failing)}")
         if code == 0:
             reason = "tests pass"
-        elif failing is None or previous is None or failing >= previous:
-            reason = "no progress"
+            progress.decide(f"Round {number} fixed the tests", describe_progress(previous, failing))
             break
+        improved = failing is not None and (best is None or failing < best)
+        best, stuck = (failing, 0) if improved else (best, stuck + 1)
+        if stuck >= retry_limit:  # this approach keeps failing: undo it and make the next round try another way
+            switch_approach(workspace, progress, attempt_start, output[-300:], log)
+            attempt_start, stuck = len(workspace.changes), 0
+            code, output = run_tests(workspace, test_cmd)
+            failing = count_failures(output, code)
+            best = failing
+            if len(progress.failed) >= max_approaches:
+                reason = f"{max_approaches} approaches failed"
+                break
+        progress.save()
 
     added, removed = workspace.net_lines()
     return {"passed": code == 0, "reason": reason, "failing": history, "added": added, "removed": removed,
@@ -71,3 +89,7 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
 
 def _describe(failing: int | None) -> str:
     return "passing" if failing == 0 else f"{failing} failing" if failing is not None else "failing (count unknown)"
+
+
+def describe_progress(before: int | None, after: int | None) -> str:
+    return f"failing tests went from {_describe(before)} to {_describe(after)}"

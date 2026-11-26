@@ -99,11 +99,11 @@ class FixTests(unittest.TestCase):
         self.assertIn("read-only", result)
         self.assertEqual((self.root / "test_calc.py").read_text(), TEST)
 
-    def test_stops_when_nothing_improves(self) -> None:
-        result = fix_tests(self._workspace(), lambda m: _done("I could not fix it."), rounds=3, log=lambda _: None)
+    def test_switches_approach_then_gives_up_when_nothing_improves(self) -> None:
+        result = fix_tests(self._workspace(), lambda m: _done("I could not fix it."), rounds=6, log=lambda _: None)
         self.assertFalse(result["passed"])
-        self.assertEqual(result["reason"], "no progress")
-        self.assertEqual(len(result["traces"]), 1)
+        self.assertEqual(result["reason"], "3 approaches failed")  # 2 rounds per approach, 3 approaches
+        self.assertEqual(len(result["traces"]), 6)
 
     def test_already_passing_does_not_call_the_model(self) -> None:
         (self.root / "calc.py").write_text(FIXED)

@@ -56,7 +56,7 @@ agent-ops code "Add a settlement_report() that totals captured payments by metho
 
 ### Fix failing tests
 
-`agent-ops fix` runs your tests, hands the failures to the agent, and runs the tests again, for up to 3 rounds. The loop stops early when the tests pass, or when a round doesn't reduce the number of failing tests. Test files are read-only in this mode, so the only way to pass is to fix the code.
+`agent-ops fix` runs your tests, hands the failures to the agent, and runs the tests again, for up to 6 rounds. If two rounds in a row don't reduce the number of failing tests, that approach is recorded as failed, its edits are undone (you approve each restore), and the next round must try a different way. It stops when the tests pass or after 3 failed approaches. Test files are read-only in this mode, so the only way to pass is to fix the code.
 
 ```bash
 agent-ops fix --workspace ~/payments-service
@@ -73,6 +73,20 @@ I ran `fix` once on each of the 5 bug-fix tasks from the benchmark. Four were fi
 ### It remembers what it has done
 
 The agent keeps a plan (a checklist it updates as it works) and a log of every file it changed, with its reason for each change. Both are saved to `.agent-ops/progress.json` after every step. Each `fix` round starts by reading them, and if a `code` run stops at the step limit, running the same command again continues from where it stopped instead of starting over. Pass `--fresh` to start over.
+
+### It tries another way when a fix keeps failing
+
+Inside any run, if the same command (usually your tests) still fails twice after the agent has edited code, the agent stops tweaking that fix. Its edits are undone, the approach is saved as failed with the error it left, and the agent is told to find a different root cause or a different fix. After 3 failed approaches it gives up and tells you, instead of looping. Failed approaches are part of the saved memory, so a later run never repeats them. Tune this with `--retry-limit` and `--max-approaches`.
+
+### Minimal changes, few tokens
+
+- `edit_file` swaps one exact snippet, so the model sends only the lines it changes, not the whole file. `write_file` is meant for new files.
+- An edit that changes more than 40 lines of an existing file is refused, and the agent is told to touch only the lines that are wrong. Change the limit with `--max-diff`, or set it to 0 to turn it off.
+- Old tool output is trimmed after a few steps, so long runs don't resend every file. A file trimmed this way can't be rewritten whole until the agent reads it again.
+
+### Decision log
+
+`.agent-ops/DECISIONS.md` is a running, human-readable log of what the agent decided and why: each task it started, each change with its reason, decisions it recorded with the `record_decision` tool, abandoned approaches and the error that ended them, and which round fixed the tests. It is kept across tasks and runs. Like the traces, it isn't committed.
 
 ### Ask it why
 

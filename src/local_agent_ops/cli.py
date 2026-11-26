@@ -7,11 +7,11 @@ import json
 import sys
 from pathlib import Path
 
-from .agent import DEFAULT_HOST, DEFAULT_MODEL, EXPLAIN_PROMPT, ollama_chat, run_agent
+from .agent import DEFAULT_HOST, DEFAULT_MODEL, EXPLAIN_PROMPT, MAX_APPROACHES, RETRY_LIMIT, ollama_chat, run_agent
 from .audit import audit_manifest
 from .fix import TEST_FILES, fix_tests
 from .progress import Progress, render_changes
-from .tools import READ_ONLY_TOOLS, Workspace
+from .tools import MAX_DIFF, READ_ONLY_TOOLS, Workspace
 from .trace import Trace, explain_run, find_run, list_runs, load, render
 
 
@@ -27,7 +27,8 @@ def main(argv: list[str] | None = None) -> int:
     code.add_argument("task")
     fix = commands.add_parser("fix", help="Run the tests and let the agent fix failures, up to --rounds times.")
     fix.add_argument("--test-cmd", default="python3 -m unittest")
-    fix.add_argument("--rounds", type=int, default=3)
+    fix.add_argument("--rounds", type=int, default=6)
+    fix.add_argument("--fresh", action="store_true", help="Ignore saved progress and failed approaches from earlier runs.")
     for sub in (code, fix):
         sub.add_argument("--workspace", type=Path, default=Path("."))
         sub.add_argument("--model", default=DEFAULT_MODEL)
@@ -35,6 +36,11 @@ def main(argv: list[str] | None = None) -> int:
         sub.add_argument("--max-steps", type=int, default=15)
         sub.add_argument("--dry-run", action="store_true", help="Show intended writes and commands without doing them.")
         sub.add_argument("--yes", action="store_true", help="Approve every write and command (use only in a throwaway workspace).")
+        sub.add_argument("--max-diff", type=int, default=MAX_DIFF,
+                         help="Most lines one edit may change in an existing file, to keep fixes minimal (0 = no limit).")
+        sub.add_argument("--retry-limit", type=int, default=RETRY_LIMIT,
+                         help="Failed tries of one approach before the agent must undo it and try another way.")
+        sub.add_argument("--max-approaches", type=int, default=MAX_APPROACHES, help="Different approaches to try before giving up.")
     code.add_argument("--no-trace", action="store_true", help="Do not save a run trace.")
     code.add_argument("--fresh", action="store_true",
                       help="Ignore saved progress. By default, re-running the same task continues where the last run stopped.")
@@ -68,7 +74,7 @@ def _workspace(args: argparse.Namespace, read_only: tuple[str, ...] = ()) -> Wor
             return True
         return input("Approve? [y/N] ").strip().lower() == "y"
 
-    workspace = Workspace(args.workspace, approve, dry_run=args.dry_run, read_only=read_only)
+    workspace = Workspace(args.workspace, approve, dry_run=args.dry_run, read_only=read_only, max_diff=args.max_diff)
     print(f"agent-ops · model={args.model} · workspace={workspace.root}")
     return workspace
 
@@ -82,11 +88,14 @@ def _code(args: argparse.Namespace) -> int:
               f"{len(progress.changes)} earlier changes. Use --fresh to start over.")
     try:
         summary = run_agent(args.task, workspace, ollama_chat(args.model, args.host), args.max_steps,
-                            trace=trace, progress=progress)
+                            trace=trace, progress=progress, retry_limit=args.retry_limit,
+                            max_approaches=args.max_approaches)
     except OSError as error:
         print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
         return 2
     added, removed = workspace.net_lines()
+    if progress:
+        print(f"decision log: {progress.log_path}")
     print(f"\n{summary}\n\nWhat changed and why:\n{render_changes(workspace.changes)}\n\nnet: +{added} -{removed} lines")
     if trace:
         print(f"trace: agent-ops replay {trace.path.stem} --workspace {args.workspace}")
@@ -97,7 +106,8 @@ def _fix(args: argparse.Namespace) -> int:
     workspace = _workspace(args, read_only=TEST_FILES)
     try:
         result = fix_tests(workspace, ollama_chat(args.model, args.host), args.test_cmd, args.rounds,
-                           args.max_steps, args.model)
+                           args.max_steps, args.model, fresh=args.fresh, retry_limit=args.retry_limit,
+                           max_approaches=args.max_approaches)
     except OSError as error:
         print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
         return 2

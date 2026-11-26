@@ -75,8 +75,10 @@ def render(events: list[dict]) -> str:
         elif e["kind"] == "model" and e.get("content"):
             lines.append(f"{stamp} model: {e['content'][:300]}")
         elif e["kind"] == "tool":
-            args = ", ".join(f"{k}={str(v)[:60]!r}" for k, v in e["args"].items() if k != "content")
+            args = ", ".join(f"{k}={str(v)[:60]!r}" for k, v in e["args"].items() if k not in ("content", "old", "new"))
             lines.append(f"{stamp} → {e['name']}({args})\n          {e['result'][:300].replace(chr(10), chr(10) + ' ' * 10)}")
+        elif e["kind"] == "switch":
+            lines.append(f"{stamp} ↺ approach failed, undone, trying another: {e['evidence'][-200:]}")
         elif e["kind"] == "end":
             lines.append(f"{stamp} end ({e['reason']}): {e['summary'][:300]}")
     return "\n".join(lines)
@@ -86,10 +88,16 @@ def explain_run(events: list[dict]) -> str:
     """A saved run as numbered steps: the plan it made, then each file change with the agent's reason."""
     lines, step = [f"task: {events[0].get('task', '')}" if events else "task: (empty trace)"], 0
     for e in events:
-        if e["kind"] != "tool" or e["name"] not in ("write_file", "update_plan"):
+        if e["kind"] == "switch":
+            step += 1
+            lines.append(f"{step}. switched approach: the previous one kept failing, so its edits were undone")
+            continue
+        if e["kind"] != "tool" or e["name"] not in ("write_file", "edit_file", "update_plan", "record_decision"):
             continue
         step += 1
-        if e["name"] == "update_plan":
+        if e["name"] == "record_decision":
+            lines.append(f"{step}. decided: {e['args'].get('decision')}\n   why: {e['args'].get('why')}")
+        elif e["name"] == "update_plan":
             plan = ", ".join(f"{i.get('step')} [{i.get('status')}]" for i in e["args"].get("steps", []) if isinstance(i, dict))
             lines.append(f"{step}. plan: {plan or e['result']}")
         else:
