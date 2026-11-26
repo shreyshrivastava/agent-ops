@@ -80,3 +80,21 @@ def render(events: list[dict]) -> str:
         elif e["kind"] == "end":
             lines.append(f"{stamp} end ({e['reason']}): {e['summary'][:300]}")
     return "\n".join(lines)
+
+
+def explain_run(events: list[dict]) -> str:
+    """A saved run as numbered steps: the plan it made, then each file change with the agent's reason."""
+    lines, step = [f"task: {events[0].get('task', '')}" if events else "task: (empty trace)"], 0
+    for e in events:
+        if e["kind"] != "tool" or e["name"] not in ("write_file", "update_plan"):
+            continue
+        step += 1
+        if e["name"] == "update_plan":
+            plan = ", ".join(f"{i.get('step')} [{i.get('status')}]" for i in e["args"].get("steps", []) if isinstance(i, dict))
+            lines.append(f"{step}. plan: {plan or e['result']}")
+        else:
+            lines.append(f"{step}. {e['args'].get('path')}: {e['result']}\n   why: {e['args'].get('reason') or 'no reason given'}")
+    end = next((e for e in reversed(events) if e["kind"] == "end"), None)
+    if end:
+        lines.append(f"\nagent's explanation ({end['reason']}):\n{end['summary']}")
+    return "\n".join(lines)

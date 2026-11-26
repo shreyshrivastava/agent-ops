@@ -30,6 +30,8 @@ class Workspace:
         self.read_only = read_only  # glob patterns, e.g. test files during `agent-ops fix`
         self.originals: dict[Path, str] = {}
         self.partial: set[Path] = set()
+        self.plan: list[dict] = []     # the agent's checklist, kept current through update_plan
+        self.changes: list[dict] = []  # every approved write: path, line counts and the agent's reason
 
     def net_lines(self) -> tuple[int, int]:
         """Lines added and removed by the final state of every file the agent wrote, versus where it started."""
@@ -67,7 +69,21 @@ class Workspace:
         self.partial.add(target)
         return text[:MAX_READ] + f"\n\n[TRUNCATED: showing {MAX_READ} of {len(text)} characters. This file is read-only for you.]"
 
-    def write_file(self, path: str, content: str) -> str:
+    def update_plan(self, steps: list) -> str:
+        """Replace the plan. Each step is {"step": str, "status": "pending"|"in_progress"|"done"} or a plain string."""
+        plan = []
+        for item in steps or []:
+            item = {"step": item, "status": "pending"} if isinstance(item, str) else dict(item)
+            if not str(item.get("step", "")).strip():
+                return "Error: every plan item needs a non-empty step."
+            if item.get("status", "pending") not in ("pending", "in_progress", "done"):
+                return f"Error: status must be pending, in_progress or done, not {item.get('status')!r}."
+            plan.append({"step": str(item["step"]).strip(), "status": item.get("status", "pending")})
+        self.plan = plan
+        done = sum(item["status"] == "done" for item in plan)
+        return f"Plan updated ({done}/{len(plan)} done)."
+
+    def write_file(self, path: str, content: str, reason: str = "") -> str:
         target = self._path(path)
         if target in self.partial:
             return f"Refused: {path} is too large to have been read in full, so rewriting it would delete content."
@@ -84,11 +100,13 @@ class Workspace:
         removed = sum(1 for line in diff if line.startswith("-") and not line.startswith("---"))
         if self.dry_run:
             return f"DRY RUN: would change {path} (+{added} -{removed})."
-        if not self.approve("\n".join(diff) + f"\n\nWrite {path}?"):
+        why = f"\nWhy: {reason.strip()}" if reason.strip() else ""
+        if not self.approve("\n".join(diff) + f"\n{why}\nWrite {path}?"):
             return "User rejected this change. Try a smaller change or explain why it is needed."
         self.originals.setdefault(target, old)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content if content.endswith("\n") else content + "\n", encoding="utf-8")
+        self.changes.append({"path": relative, "added": added, "removed": removed, "reason": reason.strip()})
         return f"Wrote {path} (+{added} -{removed})."
 
     def run_command(self, command: str) -> str:
@@ -124,8 +142,16 @@ TOOL_SCHEMAS = [
         "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}}},
     {"type": "function", "function": {"name": "read_file", "description": "Read a UTF-8 file.",
         "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
-    {"type": "function", "function": {"name": "write_file", "description": "Replace a file's full content. The user sees a diff and must approve.",
-        "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}},
+    {"type": "function", "function": {"name": "write_file", "description": "Replace a file's full content. The user sees a diff and your reason, and must approve.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"},
+            "reason": {"type": "string", "description": "One or two sentences: what this change does and why it is needed."}},
+            "required": ["path", "content", "reason"]}}},
     {"type": "function", "function": {"name": "run_command", "description": "Run an allowlisted command (python, pytest, ls, cat, grep, read-only git) in the workspace.",
         "parameters": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}},
+    {"type": "function", "function": {"name": "update_plan", "description": "Write your step-by-step plan for the task and mark progress. Call it first, and again whenever a step is finished.",
+        "parameters": {"type": "object", "properties": {"steps": {"type": "array", "items": {"type": "object", "properties": {
+            "step": {"type": "string"}, "status": {"type": "string", "enum": ["pending", "in_progress", "done"]}},
+            "required": ["step", "status"]}}}, "required": ["steps"]}}},
 ]
+
+READ_ONLY_TOOLS = {"list_files", "read_file"}

@@ -70,6 +70,22 @@ agent-ops fix --test-cmd "python3 -m pytest -q" --workspace ~/payments-service
 
 I ran `fix` once on each of the 5 bug-fix tasks from the benchmark. Four were fixed in a single round, taking 39 to 124 seconds each. The trace of the fifth is in the next section.
 
+### It remembers what it has done
+
+The agent keeps a plan (a checklist it updates as it works) and a log of every file it changed, with its reason for each change. Both are saved to `.agent-ops/progress.json` after every step. Each `fix` round starts by reading them, and if a `code` run stops at the step limit, running the same command again continues from where it stopped instead of starting over. Pass `--fresh` to start over.
+
+### Ask it why
+
+Every write needs a reason, which you see next to the diff before you approve it. At the end of a run the agent explains its work step by step, and you get a numbered list of what changed and why.
+
+`agent-ops explain` walks through code step by step without changing anything (the agent can only read files in this mode). Give it a run name instead of a file to see what that run changed and why, without calling the model:
+
+```bash
+agent-ops explain src/payments/refunds.py --workspace ~/payments-service
+agent-ops explain src/payments/refunds.py --question "why is the captured amount re-read?" --workspace ~/payments-service
+agent-ops explain 20261104-230435-501157 --workspace ~/payments-service
+```
+
 ### See what the agent did
 
 Every `code` and `fix` run saves a trace: one line per step, with the model's reply, each tool call and its result. Traces live in `.agent-ops/runs/` inside the workspace. That folder has its own `.gitignore`, so traces are never committed, and the agent can't edit them. Anything that looks like a key or token is masked before it's written.

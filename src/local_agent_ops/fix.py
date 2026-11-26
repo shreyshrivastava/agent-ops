@@ -8,6 +8,7 @@ import subprocess
 from collections.abc import Callable
 
 from .agent import Chat, run_agent
+from .progress import Progress
 from .tools import Workspace
 from .tools import NO_BYTECODE
 from .trace import Trace
@@ -38,6 +39,8 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
     history = [failing]
     log(f"tests: {_describe(failing)}")
     reason, traces = ("already passing" if code == 0 else "rounds used up"), []
+    progress = Progress(workspace.root)
+    progress.begin(f"fix: {test_cmd}", fresh=True)  # memory carries across this run's rounds, not between runs
 
     for number in range(1, rounds + 1):
         if code == 0:
@@ -47,11 +50,13 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
                 f"Test output (last part):\n{output[-MAX_FAILURE_OUTPUT:]}")
         trace = Trace(workspace.root, task, model)
         traces.append(trace.path.name)
-        run_agent(task, workspace, chat, max_steps, log=log, trace=trace)
+        run_agent(task, workspace, chat, max_steps, log=log, trace=trace, progress=progress)
         previous = failing
         code, output = run_tests(workspace, test_cmd)
         failing = count_failures(output, code)
         history.append(failing)
+        progress.note(f"After round {number}: tests {_describe(failing)}.")
+        progress.save()
         log(f"tests: {_describe(failing)}")
         if code == 0:
             reason = "tests pass"
@@ -60,7 +65,8 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
             break
 
     added, removed = workspace.net_lines()
-    return {"passed": code == 0, "reason": reason, "failing": history, "added": added, "removed": removed, "traces": traces}
+    return {"passed": code == 0, "reason": reason, "failing": history, "added": added, "removed": removed,
+            "traces": traces, "changes": workspace.changes}
 
 
 def _describe(failing: int | None) -> str:

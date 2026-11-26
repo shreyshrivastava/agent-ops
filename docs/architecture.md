@@ -20,6 +20,13 @@ trace.py  Trace: one JSONL file per run in <workspace>/.agent-ops/runs/
   - keys and tokens masked with the auditor's patterns before writing
   - .agent-ops/.gitignore ignores everything, and the agent can't write there
 
+progress.py  Progress: .agent-ops/progress.json — the plan (update_plan tool) and every change with its reason
+  - saved after every step; the next fix round, or a re-run of the same `code` task, is briefed from it
+
+agent-ops explain <file | run>
+  - file: run_agent with EXPLAIN_PROMPT and only read_file/list_files exposed
+  - run:  trace.explain_run lists the plan and each write with its reason, no model needed
+
 agent-ops fix
         |
         v

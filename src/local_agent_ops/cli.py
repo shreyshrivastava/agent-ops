@@ -1,4 +1,4 @@
-"""Command-line interface: `code`, `fix`, `runs`, `replay` and `audit`."""
+"""Command-line interface: `code`, `fix`, `explain`, `runs`, `replay` and `audit`."""
 
 from __future__ import annotations
 
@@ -7,11 +7,12 @@ import json
 import sys
 from pathlib import Path
 
-from .agent import DEFAULT_HOST, DEFAULT_MODEL, ollama_chat, run_agent
+from .agent import DEFAULT_HOST, DEFAULT_MODEL, EXPLAIN_PROMPT, ollama_chat, run_agent
 from .audit import audit_manifest
 from .fix import TEST_FILES, fix_tests
-from .tools import Workspace
-from .trace import Trace, find_run, list_runs, load, render
+from .progress import Progress, render_changes
+from .tools import READ_ONLY_TOOLS, Workspace
+from .trace import Trace, explain_run, find_run, list_runs, load, render
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,6 +36,16 @@ def main(argv: list[str] | None = None) -> int:
         sub.add_argument("--dry-run", action="store_true", help="Show intended writes and commands without doing them.")
         sub.add_argument("--yes", action="store_true", help="Approve every write and command (use only in a throwaway workspace).")
     code.add_argument("--no-trace", action="store_true", help="Do not save a run trace.")
+    code.add_argument("--fresh", action="store_true",
+                      help="Ignore saved progress. By default, re-running the same task continues where the last run stopped.")
+
+    explain = commands.add_parser("explain", help="Explain code step by step, or explain what a past run changed and why.")
+    explain.add_argument("target", help="A file or folder in the workspace, or a run name from `agent-ops runs`.")
+    explain.add_argument("--question", default="", help="A specific question, e.g. 'why is the lock needed?'")
+    explain.add_argument("--workspace", type=Path, default=Path("."))
+    explain.add_argument("--model", default=DEFAULT_MODEL)
+    explain.add_argument("--host", default=DEFAULT_HOST)
+    explain.add_argument("--max-steps", type=int, default=10)
 
     runs = commands.add_parser("runs", help="List saved run traces.")
     replay = commands.add_parser("replay", help="Show a saved run step by step.")
@@ -44,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     handlers = {"audit": lambda: _audit(args, parser), "code": lambda: _code(args), "fix": lambda: _fix(args),
+                "explain": lambda: _explain(args),
                 "runs": lambda: _runs(args), "replay": lambda: _replay(args)}
     return handlers[args.command]()
 
@@ -64,13 +76,18 @@ def _workspace(args: argparse.Namespace, read_only: tuple[str, ...] = ()) -> Wor
 def _code(args: argparse.Namespace) -> int:
     workspace = _workspace(args)
     trace = None if args.no_trace else Trace(workspace.root, args.task, args.model)
+    progress = None if args.dry_run else Progress(workspace.root)
+    if progress and progress.begin(args.task, fresh=args.fresh):
+        print(f"Resuming: {sum(i['status'] == 'done' for i in progress.plan)}/{len(progress.plan)} plan steps done, "
+              f"{len(progress.changes)} earlier changes. Use --fresh to start over.")
     try:
-        summary = run_agent(args.task, workspace, ollama_chat(args.model, args.host), args.max_steps, trace=trace)
+        summary = run_agent(args.task, workspace, ollama_chat(args.model, args.host), args.max_steps,
+                            trace=trace, progress=progress)
     except OSError as error:
         print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
         return 2
     added, removed = workspace.net_lines()
-    print(f"\n{summary}\n\nnet: +{added} -{removed} lines")
+    print(f"\n{summary}\n\nWhat changed and why:\n{render_changes(workspace.changes)}\n\nnet: +{added} -{removed} lines")
     if trace:
         print(f"trace: agent-ops replay {trace.path.stem} --workspace {args.workspace}")
     return 0
@@ -84,12 +101,33 @@ def _fix(args: argparse.Namespace) -> int:
     except OSError as error:
         print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
         return 2
+    print(f"\nWhat changed and why:\n{render_changes(result['changes'])}")
     history = " → ".join("?" if n is None else str(n) for n in result["failing"])
     print(f"\n{'PASS' if result['passed'] else 'FAIL'}: {result['reason']} · failing tests {history} · "
           f"net +{result['added']} -{result['removed']} lines")
     for name in result["traces"]:
         print(f"trace: agent-ops replay {Path(name).stem} --workspace {args.workspace}")
     return 0 if result["passed"] else 1
+
+
+def _explain(args: argparse.Namespace) -> int:
+    root = args.workspace.resolve()
+    if not (root / args.target).exists():  # not a file: try a saved run, which needs no model
+        try:
+            print(explain_run(load(find_run(root, args.target))))
+            return 0
+        except FileNotFoundError:
+            print(f"{args.target} is neither a file in {root} nor a saved run.", file=sys.stderr)
+            return 1
+    workspace = Workspace(root, lambda _: False, dry_run=True)  # explaining never writes or runs anything
+    task = f"Explain `{args.target}` step by step." + (f" Focus on this question: {args.question}" if args.question else "")
+    try:
+        print(run_agent(task, workspace, ollama_chat(args.model, args.host, READ_ONLY_TOOLS), args.max_steps,
+                        system=EXPLAIN_PROMPT, tools=READ_ONLY_TOOLS))
+    except OSError as error:
+        print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def _runs(args: argparse.Namespace) -> int:
