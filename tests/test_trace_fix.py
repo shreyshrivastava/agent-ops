@@ -7,6 +7,7 @@ from pathlib import Path
 from local_agent_ops.agent import run_agent
 from local_agent_ops.cli import main
 from local_agent_ops.fix import TEST_FILES, count_failures, fix_tests
+from local_agent_ops.progress import Progress
 from local_agent_ops.tools import Workspace
 from local_agent_ops.trace import Trace, list_runs, load, mask, render
 
@@ -94,6 +95,18 @@ class FixTests(unittest.TestCase):
         self.assertEqual(result["failing"], [1, 0])
         self.assertEqual(len(result["traces"]), 1)
 
+    def test_model_timeout_skips_the_round_instead_of_ending_the_run(self) -> None:
+        replies = [TimeoutError("timed out"), _call("write_file", path="calc.py", content=FIXED), _done()]
+
+        def chat(messages):
+            reply = replies.pop(0)
+            if isinstance(reply, Exception):
+                raise reply
+            return reply
+        result = fix_tests(self._workspace(), chat, log=lambda _: None)
+        self.assertTrue(result["passed"])
+        self.assertEqual(len(result["traces"]), 2)
+
     def test_test_files_are_read_only(self) -> None:
         result = self._workspace().write_file("test_calc.py", "")
         self.assertIn("read-only", result)
@@ -104,6 +117,16 @@ class FixTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(result["reason"], "3 approaches failed")  # 2 rounds per approach, 3 approaches
         self.assertEqual(len(result["traces"]), 6)
+
+    def test_stops_when_the_agent_gives_up_inside_a_round(self) -> None:
+        def chat(messages):
+            n = len(messages)
+            return (_call("write_file", path="calc.py", content=f"def add(a, b):\n    return {n}\n", reason=f"guess {n}")
+                    if n % 3 == 2 else _call("run_command", command="python3 -m unittest"))
+        result = fix_tests(self._workspace(), chat, rounds=6, max_steps=40, log=lambda _: None, max_approaches=2)
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["reason"], "2 approaches failed")
+        self.assertEqual(len(Progress(self.root).failed), 2)  # no extra rounds after the agent gave up
 
     def test_already_passing_does_not_call_the_model(self) -> None:
         (self.root / "calc.py").write_text(FIXED)

@@ -143,6 +143,27 @@ class RetryAndMinimalTests(unittest.TestCase):
         self.assertIn("Abandoned approach #1", log)
         self.assertIn("add, not subtract", log)
 
+    def test_fewer_failures_each_run_is_progress_not_a_strike(self) -> None:
+        (self.root / "calc.py").write_text("def add(a, b):\n    return a - b\ndef sub(a, b):\n    return a + b\n"
+                                           "def mul(a, b):\n    return a + b\n")
+        (self.root / "test_calc.py").write_text(
+            "import unittest\nfrom calc import add, sub, mul\n\nclass T(unittest.TestCase):\n"
+            "    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n"
+            "    def test_sub(self):\n        self.assertEqual(sub(5, 3), 2)\n"
+            "    def test_mul(self):\n        self.assertEqual(mul(2, 3), 6)\n")
+        run = _call("run_command", command="python3 -m unittest")
+        replies = [_call("edit_file", path="calc.py", old="return a - b", new="return a + b", reason="fix add"), run,
+                   _call("edit_file", path="calc.py", old="sub(a, b):\n    return a + b", new="sub(a, b):\n    return a - b",
+                         reason="fix sub"), run,
+                   _call("edit_file", path="calc.py", old="mul(a, b):\n    return a + b", new="mul(a, b):\n    return a * b",
+                         reason="fix mul"), run, _done()]
+        progress = Progress(self.root)
+        progress.begin("fix calc")
+        run_agent("fix calc", Workspace(self.root, lambda _: True), lambda m: replies.pop(0), log=lambda _: None,
+                  progress=progress)
+        self.assertEqual(Progress(self.root).failed, [])  # 3 -> 2 -> 1 -> 0 failing is progress: nothing undone
+        self.assertIn("return a * b", (self.root / "calc.py").read_text())
+
     def test_gives_up_after_max_approaches(self) -> None:
         def chat(messages):
             n = len(messages)

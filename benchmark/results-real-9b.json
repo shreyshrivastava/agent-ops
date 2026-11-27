@@ -1,0 +1,165 @@
+{
+  "model": "huihui_ai/qwen3.5-abliterated:9b",
+  "results": [
+    {
+      "task": "01_paise_conversion",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 7,
+      "removed": 1,
+      "tool_calls": 13,
+      "seconds": 99.2
+    },
+    {
+      "task": "01_paise_conversion",
+      "mode": "baseline",
+      "run": 0,
+      "passed": true,
+      "added": 11,
+      "removed": 1,
+      "tool_calls": 18,
+      "seconds": 187.8
+    },
+    {
+      "task": "02_gst_rounding",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 2,
+      "removed": 1,
+      "tool_calls": 7,
+      "seconds": 50.9
+    },
+    {
+      "task": "02_gst_rounding",
+      "mode": "baseline",
+      "run": 0,
+      "passed": true,
+      "added": 3,
+      "removed": 1,
+      "tool_calls": 6,
+      "seconds": 35.9
+    },
+    {
+      "task": "03_webhook_signature",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 3,
+      "removed": 2,
+      "tool_calls": 5,
+      "seconds": 38.4
+    },
+    {
+      "task": "03_webhook_signature",
+      "mode": "baseline",
+      "run": 0,
+      "passed": true,
+      "added": 3,
+      "removed": 2,
+      "tool_calls": 5,
+      "seconds": 31.7
+    },
+    {
+      "task": "04_idempotent_payments",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 10,
+      "removed": 1,
+      "tool_calls": 8,
+      "seconds": 85.8
+    },
+    {
+      "task": "04_idempotent_payments",
+      "mode": "baseline",
+      "run": 0,
+      "passed": true,
+      "added": 16,
+      "removed": 1,
+      "tool_calls": 8,
+      "seconds": 111.0
+    },
+    {
+      "task": "05_partial_refunds",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": false,
+      "added": 2,
+      "removed": 1,
+      "tool_calls": 16,
+      "seconds": 158.2
+    },
+    {
+      "task": "05_partial_refunds",
+      "mode": "baseline",
+      "run": 0,
+      "passed": false,
+      "added": 0,
+      "removed": 0,
+      "tool_calls": 17,
+      "seconds": 243.0
+    },
+    {
+      "task": "06_feature_inr_format",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": false,
+      "added": 26,
+      "removed": 2,
+      "tool_calls": 16,
+      "seconds": 194.2
+    },
+    {
+      "task": "06_feature_inr_format",
+      "mode": "baseline",
+      "run": 0,
+      "passed": false,
+      "added": 0,
+      "removed": 0,
+      "tool_calls": 17,
+      "seconds": 152.8
+    },
+    {
+      "task": "07_feature_settlement_report",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 18,
+      "removed": 0,
+      "tool_calls": 6,
+      "seconds": 56.1
+    },
+    {
+      "task": "07_feature_settlement_report",
+      "mode": "baseline",
+      "run": 0,
+      "passed": true,
+      "added": 14,
+      "removed": 0,
+      "tool_calls": 6,
+      "seconds": 42.1
+    },
+    {
+      "task": "08_feature_retry_gateway",
+      "mode": "minimal-rules",
+      "run": 0,
+      "passed": true,
+      "added": 27,
+      "removed": 0,
+      "tool_calls": 6,
+      "seconds": 45.5
+    },
+    {
+      "task": "08_feature_retry_gateway",
+      "mode": "baseline",
+      "run": 0,
+      "passed": true,
+      "added": 22,
+      "removed": 0,
+      "tool_calls": 8,
+      "seconds": 60.5
+    }
+  ]
+}

@@ -176,9 +176,14 @@ def run_agent(task: str, workspace: Workspace, chat: Chat, max_steps: int = 15,
                 if result.startswith("exit=0"):
                     failures.pop(command, None)
                 else:
-                    failures[command] = failures.get(command, 0) + 1
+                    from .fix import count_failures  # local import: fix.py imports this module
+                    code, _, output = result.partition("\n")
+                    count = count_failures(output, int(code[5:]))
+                    strikes, last = failures.get(command, (0, None))
+                    progressed = count is not None and last is not None and count < last  # fewer failing is not a strike
+                    failures[command] = (strikes if progressed else strikes + 1, count)
                     edited_since = len(workspace.changes) > attempt_start
-                    if failures[command] >= retry_limit and edited_since:
+                    if failures[command][0] >= retry_limit and edited_since:
                         switch = result
         if switch:
             if progress and len(progress.failed) + 1 >= max_approaches:

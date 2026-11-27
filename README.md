@@ -182,6 +182,8 @@ PYTHONPATH=src python3 benchmark/run.py --runs 2
 PYTHONPATH=src python3 benchmark/run.py --only feature --out results-features.json
 ```
 
+I reran all 8 tasks on 2026-11-26 with the loop memory, completion gate and approach switching added, once per mode on the same model: 6/8 passed with the system prompt and 6/8 with the baseline ([`results-real-9b.json`](benchmark/results-real-9b.json)). Both modes failed refund limits and rupee formatting again. With `agent-ops fix`, both still failed after 3 approaches: the model kept letting zero and negative refunds through, and kept writing `₹0.0` or `₹00.00` where the tests expect `₹0.00`. Neither task has passed reliably with this model, so treat them as its known limits.
+
 ## Tests
 
 ```bash

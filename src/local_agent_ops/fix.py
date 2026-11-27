@@ -56,8 +56,15 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
                 f"Test output (last part):\n{output[-MAX_FAILURE_OUTPUT:]}")
         trace = Trace(workspace.root, task, model)
         traces.append(trace.path.name)
-        run_agent(task, workspace, chat, max_steps, log=log, trace=trace, progress=progress,
-                  retry_limit=retry_limit, max_approaches=max_approaches)
+        try:
+            run_agent(task, workspace, chat, max_steps, log=log, trace=trace, progress=progress,
+                      retry_limit=retry_limit, max_approaches=max_approaches)
+        except TimeoutError:  # one slow model reply ends this round, not the whole run; its edits are kept
+            log("model reply timed out; ending this round")
+            progress.note(f"Round {number}: the model timed out.")
+        if len(progress.failed) >= max_approaches:  # the agent already gave up inside this round
+            reason = f"{max_approaches} approaches failed"
+            break
         previous = failing
         code, output = run_tests(workspace, test_cmd)
         failing = count_failures(output, code)
