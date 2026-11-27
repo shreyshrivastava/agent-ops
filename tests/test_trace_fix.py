@@ -1,8 +1,10 @@
 import io
+import json
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from local_agent_ops.agent import run_agent
 from local_agent_ops.cli import main
@@ -112,6 +114,17 @@ class FixTests(unittest.TestCase):
         result = fix_tests(self._workspace(), lambda m: replies.pop(0), log=lambda _: None)
         self.assertTrue(result["passed"])
         self.assertEqual(len(result["traces"]), 1)  # the gate sent it back inside round 1, no second round needed
+
+    def test_fix_json_prints_only_the_result_on_stdout(self) -> None:
+        replies = [_call("write_file", path="calc.py", content=FIXED), _done()]
+        output = io.StringIO()
+        with mock.patch("local_agent_ops.cli.ollama_chat", return_value=lambda m: replies.pop(0)), \
+                redirect_stdout(output), redirect_stderr(io.StringIO()):
+            code = main(["fix", "--workspace", str(self.root), "--yes", "--json"])
+        self.assertEqual(code, 0)
+        result = json.loads(output.getvalue())  # nothing but the JSON on stdout
+        self.assertTrue(result["passed"])
+        self.assertEqual(result["failing"], [1, 0])
 
     def test_test_files_are_read_only(self) -> None:
         result = self._workspace().write_file("test_calc.py", "")

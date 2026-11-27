@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import subprocess
 import sys
@@ -31,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     fix.add_argument("--test-cmd", default="python3 -m unittest")
     fix.add_argument("--rounds", type=int, default=6)
     fix.add_argument("--fresh", action="store_true", help="Ignore saved progress and failed approaches from earlier runs.")
+    fix.add_argument("--json", action="store_true", help="Print only the result as JSON on stdout; progress goes to stderr.")
     for sub in (code, fix):
         sub.add_argument("--workspace", type=Path, default=Path("."))
         sub.add_argument("--model", default=DEFAULT_MODEL)
@@ -112,14 +114,18 @@ def _code(args: argparse.Namespace) -> int:
 
 
 def _fix(args: argparse.Namespace) -> int:
-    workspace = _workspace(args, read_only=TEST_FILES)
-    try:
-        result = fix_tests(workspace, ollama_chat(args.model, args.host), args.test_cmd, args.rounds,
-                           args.max_steps, args.model, fresh=args.fresh, retry_limit=args.retry_limit,
-                           max_approaches=args.max_approaches)
-    except OSError as error:
-        print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
-        return 2
+    with contextlib.redirect_stdout(sys.stderr if args.json else sys.stdout):  # --json: keep stdout for the result
+        workspace = _workspace(args, read_only=TEST_FILES)
+        try:
+            result = fix_tests(workspace, ollama_chat(args.model, args.host), args.test_cmd, args.rounds,
+                               args.max_steps, args.model, fresh=args.fresh, retry_limit=args.retry_limit,
+                               max_approaches=args.max_approaches)
+        except OSError as error:
+            print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
+            return 2
+    if args.json:
+        print(json.dumps(result))
+        return 0 if result["passed"] else 1
     print(f"\nWhat changed and why:\n{render_changes(result['changes'])}")
     history = " → ".join("?" if n is None else str(n) for n in result["failing"])
     print(f"\n{'PASS' if result['passed'] else 'FAIL'}: {result['reason']} · failing tests {history} · "
@@ -130,16 +136,19 @@ def _fix(args: argparse.Namespace) -> int:
 
 
 def _review(args: argparse.Namespace) -> int:
+    """Exit 0 when clean, 1 when there are findings, 2 when the review could not run."""
     try:
-        print(review_diff(args.workspace.resolve(), args.base,
-                          ollama_chat(args.model, args.host, READ_ONLY_TOOLS), args.max_steps))
+        text = review_diff(args.workspace.resolve(), args.base,
+                           ollama_chat(args.model, args.host, READ_ONLY_TOOLS), args.max_steps)
     except subprocess.CalledProcessError as error:
         print(f"git diff {args.base} failed: {(error.stderr.strip().splitlines() or ['?'])[0]}", file=sys.stderr)
-        return 1
+        return 2
     except OSError as error:
         print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
         return 2
-    return 0
+    print(text)
+    # shortcut: relies on the prompt's exact "No problems found." wording; a rephrased all-clear counts as findings
+    return 0 if text.startswith("No changes") or "no problems found" in text.lower() else 1
 
 
 def _explain(args: argparse.Namespace) -> int:

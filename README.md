@@ -63,10 +63,10 @@ agent-ops fix --workspace /tmp/demo
 | Command | What it does |
 |---|---|
 | `agent-ops code "<task>" --workspace DIR` | Do a task in plain English: read, edit, run tests, until done |
-| `agent-ops fix --workspace DIR` | Run the tests, fix the code (test files are read-only), rerun, for up to 6 rounds |
+| `agent-ops fix --workspace DIR` | Run the tests, fix the code (test files are read-only), rerun, for up to 6 rounds. Exits 0 on pass, 1 on fail; `--json` prints only the result as JSON |
 | `agent-ops explain FILE --workspace DIR` | Explain code step by step without changing anything. Add `--question "..."` to ask about something specific |
 | `agent-ops explain RUN --workspace DIR` | Explain what a past run changed and why, from its trace, without calling the model |
-| `agent-ops review [--base main] --workspace DIR` | Review `git diff BASE` before you push: numbered findings with `file:line`, nothing written or run |
+| `agent-ops review [--base main] --workspace DIR` | Review `git diff BASE` before you push: numbered findings with `file:line`, nothing written or run. Exits 0 clean, 1 findings, 2 if it couldn't run |
 | `agent-ops runs` / `agent-ops replay RUN` | List past runs, or replay one step by step |
 | `agent-ops audit FILE` | Check an agent config for leaked keys and missing approval rules. Exits 1 on a problem, for CI |
 
@@ -142,7 +142,7 @@ PYTHONPATH=src python3 benchmark/run.py --runs 2      # about an hour; --out is 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The 54 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
+The 56 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
 
 ## Roadmap
 
@@ -151,7 +151,7 @@ Small changes planned next, each under about 30 lines:
 - [x] `agent-ops review`: a read-only review of `git diff <base>` with numbered findings, for local pre-push review
 - [x] Use your test command as the completion check in `fix`, even when the model doesn't set one
 - [x] Refuse an edit that repeats an approach that already failed
-- [ ] `--json` output and exit codes for CI and pre-commit hooks
+- [x] `--json` output and exit codes for CI and pre-commit hooks
 - [ ] Publish as `agent-ops` with `pipx` install instructions
 - [ ] Rerun the benchmark with 2 runs per task on this version
 

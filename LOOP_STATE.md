@@ -124,7 +124,7 @@ minimal changes, and explain step by step what it changed and why.
 
 ## Results
 
-- Fake-model unit tests: 54/54 pass (2 review tests, 1 gate test and 1 repeat-refusal test added in session 5); before that 50/50 (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
+- Fake-model unit tests: 56/56 pass (session 5 added tests for review, the gate, repeat refusal, fix --json and review exit codes); before that 50/50 (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
 - Real model (session 4, huihui_ai/qwen3.5-abliterated:9b, Ollama app 0.40.16, benchmark/run.py, 1 run per mode):
   minimal-rules 6/8 (avg 12.9 net lines, 9.6 calls, 91s), baseline 6/8 (9.2 lines, 10.6 calls, 108s).
   Both modes fail 05_partial_refunds and 06_feature_inr_format. In 06, baseline made no edits at all, so its
@@ -159,7 +159,11 @@ Plan (smallest first; each is under 30 lines of code):
       limit after round 2, so the F5 fix held on the real model.)
       F3: refuse an edit whose new text exactly matches an edit from an undone approach, and tell the model it already
       failed. Test: repeat edit is refused with that message.
-- [ ] 4. `--json` on `fix`, and `review` exit codes (0 clean, 1 findings), so it can run in CI or a pre-commit hook.
+- [x] 4. (2026-11-27: done in cli.py. `fix --json` sends progress and prompts to stderr and prints only the result
+      JSON on stdout; exit 0 pass / 1 fail. `review` exits 0 clean, 1 findings, 2 could not run (git error moved from 1 to 2).
+      Tests mock ollama_chat: test_fix_json_prints_only_the_result_on_stdout, test_exit_codes_say_whether_there_are_findings;
+      both failed before; suite 56/56 OK. Shortcut: review's all-clear relies on the exact "No problems found." wording.)
+      `--json` on `fix`, and `review` exit codes (0 clean, 1 findings), so it can run in CI or a pre-commit hook.
 - [ ] 5. Packaging: rename the dist to `agent-ops` in pyproject.toml, recommend `pipx install .` (system pip is
       PEP 668-blocked on macOS), set the real author, add CHANGELOG.md and CONTRIBUTING.md.
 - [ ] 6. benchmark/run.py: print the crash text instead of hiding it as tool_calls: 1, and document `--out` as relative
