@@ -38,6 +38,8 @@ class Workspace:
         self.changes: list[dict] = []  # every approved write: path, line counts and the agent's reason
         self.decisions: list[dict] = []  # decisions the agent recorded, flushed to DECISIONS.md by the loop
         self.attempt: dict[Path, str] = {}  # file contents before the current approach, for undoing it
+        # shortcut: exact file versions only and only for this run; a near-identical retry still gets through
+        self.failed_versions: set[tuple[Path, str]] = set()
         self.stale: set[Path] = set()  # files whose contents were trimmed from the model's context
         self.done_when: list[str] = []  # what "done" means for this task, set by the agent
         self.check_command = ""  # a command that must pass before the agent may finish
@@ -133,6 +135,8 @@ class Workspace:
         """Put back every file the current approach changed (each restore is shown and approved). Returns the paths restored."""
         restored = []
         for target, before in list(self.attempt.items()):
+            if target.exists():
+                self.failed_versions.add((target, target.read_text(encoding="utf-8")))
             relative = target.relative_to(self.root).as_posix()
             if self._write(target, relative, before, "undo a failed approach before trying another", limit=False).startswith("Wrote"):
                 restored.append(relative)
@@ -145,6 +149,9 @@ class Workspace:
             return "Refused: .agent-ops holds this agent's own run traces and cannot be edited."
         if any(fnmatch.fnmatch(relative, p) or fnmatch.fnmatch(target.name, p) for p in self.read_only):
             return f"Refused: {path} is read-only in this mode. Fix the code under test, not the test."
+        if limit and (target, content if content.endswith("\n") else content + "\n") in self.failed_versions:
+            return (f"Refused: this exact version of {path} was already tried in an approach that failed and was undone. "
+                    "Find a different root cause or a different fix.")
         old = target.read_text(encoding="utf-8") if target.exists() else ""
         diff = list(difflib.unified_diff(old.splitlines(), content.splitlines(), f"a/{path}", f"b/{path}", lineterm=""))
         if not diff:

@@ -89,7 +89,7 @@ agent-ops fix --workspace /tmp/demo
 
 **Getting it done**
 - **Completion gate.** The agent writes down what "done" means and which command proves it. It can't finish while plan steps are open or that command fails.
-- **Two strikes.** If the same command keeps failing with no fewer failing tests, the approach is undone (with your approval), recorded as failed, and the agent must try a different way. It gives up after 3 approaches instead of looping.
+- **Two strikes.** If the same command keeps failing with no fewer failing tests, the approach is undone (with your approval), recorded as failed, and the agent must try a different way. Writing the exact same version again is refused. It gives up after 3 approaches instead of looping.
 - **Memory.** The plan, changes, reasons, done criteria and failed approaches are saved to `.agent-ops/progress.json` after every step. Later rounds and reruns continue from there.
 
 **Minimal changes**
@@ -142,7 +142,7 @@ PYTHONPATH=src python3 benchmark/run.py --runs 2      # about an hour; --out is 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The 53 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
+The 54 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
 
 ## Roadmap
 
@@ -150,7 +150,7 @@ Small changes planned next, each under about 30 lines:
 
 - [x] `agent-ops review`: a read-only review of `git diff <base>` with numbered findings, for local pre-push review
 - [x] Use your test command as the completion check in `fix`, even when the model doesn't set one
-- [ ] Refuse an edit that repeats an approach that already failed
+- [x] Refuse an edit that repeats an approach that already failed
 - [ ] `--json` output and exit codes for CI and pre-commit hooks
 - [ ] Publish as `agent-ops` with `pipx` install instructions
 - [ ] Rerun the benchmark with 2 runs per task on this version

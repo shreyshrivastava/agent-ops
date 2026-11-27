@@ -164,6 +164,15 @@ class RetryAndMinimalTests(unittest.TestCase):
         self.assertEqual(Progress(self.root).failed, [])  # 3 -> 2 -> 1 -> 0 failing is progress: nothing undone
         self.assertIn("return a * b", (self.root / "calc.py").read_text())
 
+    def test_a_version_from_an_undone_approach_is_refused(self) -> None:
+        workspace = Workspace(self.root, lambda _: True)
+        tried = "def add(a, b):\n    return a * b\n"
+        self.assertTrue(workspace.write_file("calc.py", tried, reason="try multiply").startswith("Wrote"))
+        workspace.undo_attempt()
+        self.assertIn("already tried", workspace.write_file("calc.py", tried, reason="try multiply again"))
+        self.assertEqual((self.root / "calc.py").read_text(), BUGGY)
+        self.assertTrue(workspace.write_file("calc.py", FIXED, reason="add").startswith("Wrote"))  # a different fix is fine
+
     def test_gives_up_after_max_approaches(self) -> None:
         def chat(messages):
             n = len(messages)

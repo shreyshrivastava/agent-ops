@@ -120,11 +120,11 @@ minimal changes, and explain step by step what it changed and why.
 - huihui_ai/qwen3.5-abliterated:9b doesn't pass 05_partial_refunds (1/7 runs ever) or 06_feature_inr_format (0/7): it lets
   non-positive refunds through and gets the decimal part of rupee formatting wrong. This is the model, not the agent loop.
 - The model never calls update_plan or set_done_criteria (F2). `fix` now gives the gate the test command anyway (session 5); `code` runs still depend on the model setting one.
-- F3 (the model repeats a recorded failed approach) is not fixed by prompting yet.
+- F3: exact repeats of an undone file version are now refused (session 5). Near-identical retries still get through.
 
 ## Results
 
-- Fake-model unit tests: 53/53 pass (2 review tests and 1 gate test added in session 5); before that 50/50 (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
+- Fake-model unit tests: 54/54 pass (2 review tests, 1 gate test and 1 repeat-refusal test added in session 5); before that 50/50 (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
 - Real model (session 4, huihui_ai/qwen3.5-abliterated:9b, Ollama app 0.40.16, benchmark/run.py, 1 run per mode):
   minimal-rules 6/8 (avg 12.9 net lines, 9.6 calls, 91s), baseline 6/8 (9.2 lines, 10.6 calls, 108s).
   Both modes fail 05_partial_refunds and 06_feature_inr_format. In 06, baseline made no edits at all, so its
@@ -152,7 +152,10 @@ Plan (smallest first; each is under 30 lines of code):
       (no 'not done yet'), so this pass is not evidence for the change: one sample of a task that passed 1 of 7 before.)
       F2: in `fix`, set the check command for the model (workspace.check_command = test_cmd) so the completion gate
       always has a check, even when the model never calls set_done_criteria. Test: gate blocks finishing while tests fail.
-- [ ] 3. F3: refuse an edit whose new text exactly matches an edit from an undone approach, and tell the model it already
+- [x] 3. (2026-11-27: done in tools.py. undo_attempt records each file's failed version; _write refuses that exact
+      version again, except for the undo's own restore. Test test_a_version_from_an_undone_approach_is_refused failed before,
+      passes now; suite 54/54 OK. Limit: exact versions only, within one run; not yet checked on the real model.)
+      F3: refuse an edit whose new text exactly matches an edit from an undone approach, and tell the model it already
       failed. Test: repeat edit is refused with that message.
 - [ ] 4. `--json` on `fix`, and `review` exit codes (0 clean, 1 findings), so it can run in CI or a pre-commit hook.
 - [ ] 5. Packaging: rename the dist to `agent-ops` in pyproject.toml, recommend `pipx install .` (system pip is
