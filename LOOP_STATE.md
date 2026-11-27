@@ -154,7 +154,9 @@ Plan (smallest first; each is under 30 lines of code):
       always has a check, even when the model never calls set_done_criteria. Test: gate blocks finishing while tests fail.
 - [x] 3. (2026-11-27: done in tools.py. undo_attempt records each file's failed version; _write refuses that exact
       version again, except for the undo's own restore. Test test_a_version_from_an_undone_approach_is_refused failed before,
-      passes now; suite 54/54 OK. Limit: exact versions only, within one run; not yet checked on the real model.)
+      passes now; suite 54/54 OK. Limit: exact versions only, within one run. Real 06 rerun 2026-11-27: FAIL, 3 approaches,
+      the refusal never triggered (each retry differed), best approach left 2 of 3 tests failing; it stopped right at the
+      limit after round 2, so the F5 fix held on the real model.)
       F3: refuse an edit whose new text exactly matches an edit from an undone approach, and tell the model it already
       failed. Test: repeat edit is refused with that message.
 - [ ] 4. `--json` on `fix`, and `review` exit codes (0 clean, 1 findings), so it can run in CI or a pre-commit hook.
