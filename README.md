@@ -1,6 +1,6 @@
 <h1 align="center">agent-ops</h1>
 
-<p align="center"><b>A coding agent that runs on your laptop and asks before it changes a file or runs a command.</b></p>
+<p align="center"><b>The auditable local coding agent. It asks before every change, says why, and keeps a record you can replay.</b></p>
 
 <p align="center">
   <a href="https://github.com/shreyshrivastava/agent-ops/actions/workflows/ci.yml"><img src="https://github.com/shreyshrivastava/agent-ops/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
@@ -11,178 +11,129 @@
 </p>
 
 <p align="center">
-  <a href="#get-started">Get started</a> ·
-  <a href="#what-you-can-do-with-it">Usage</a> ·
-  <a href="#fix-failing-tests">Fix tests</a> ·
-  <a href="#how-it-is-built">Design</a> ·
-  <a href="#does-it-work">Benchmark</a> ·
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#benchmark">Benchmark</a> ·
+  <a href="#roadmap">Roadmap</a> ·
   <a href="#limitations">Limitations</a>
 </p>
 
-agent-ops is a coding agent for your terminal. You describe a task, or point it at failing tests, and it reads your code, edits files and runs your tests until the task is done. Every run is saved, so you can replay what it did afterwards. It uses a model running on your own machine through Ollama, so nothing is sent to a cloud API.
+agent-ops fixes bugs and makes small changes in your code using a model that runs on your own machine through [Ollama](https://ollama.com). Nothing is sent to a cloud API. Before every file write you see the diff and the agent's reason, and before every command you see what will run. You approve each one.
 
-Before every file write you see a diff, and before every command you see what will run. You approve each one by typing `y`.
+Every change is recorded with its reason. Each run has a replayable trace and a plain-text decision log, so afterwards you can answer "what did the agent change, who approved it, and why?" It's about 1,000 lines of standard-library Python with no dependencies, small enough to read in an afternoon.
 
 <p align="center">
   <img src="docs/demo.png" alt="agent-ops fixing a webhook signature check with a local model" width="820">
 </p>
 <p align="center"><i>A real session with Qwen 3.5 9B. The webhook check used MD5, so the agent switched it to HMAC-SHA256 with a constant-time comparison, asked before writing and before running the tests, and reported a net change of three lines added and two removed.</i></p>
 
-## Get started
+## Why agent-ops?
 
-You need Python 3.10 or newer and [Ollama](https://ollama.com).
+Big open-source agents such as [Aider](https://aider.chat), [OpenCode](https://opencode.ai), [Cline](https://cline.bot), [OpenHands](https://github.com/All-Hands-AI/OpenHands) and [goose](https://github.com/block/goose) are more capable, especially with large models. Self-hosted PR reviewers such as [PR-Agent](https://github.com/the-pr-agent/pr-agent) and [Kodus](https://github.com/kodustech/kodus-ai) review pull requests on a server. agent-ops aims at a narrower job:
+
+- **Auditable by default.** Every write carries a reason you approve. Runs are saved as traces you can replay, `.agent-ops/DECISIONS.md` logs every decision, and `agent-ops explain <run>` turns a past run into a numbered "what changed and why" list.
+- **Built for small local models.** The completion gate, the two-strikes approach switching, the 40-line edit cap and output trimming are there because a 9B model loops, over-edits and forgets. These guardrails are enforced in code, not just asked for in the prompt.
+- **Offline and dependency-free.** It needs Python and Ollama only, with no account, no Docker and no network calls beyond your local Ollama server.
+
+Use a bigger agent for large refactors or multi-file features. Use agent-ops when you want small, reviewed fixes with a record of each one, on code that shouldn't leave your machine.
+
+## Quickstart
+
+You need Python 3.10 or newer and Ollama, running with a model that supports tool calling.
 
 ```bash
-ollama pull huihui_ai/qwen3.5-abliterated:9b
+ollama pull huihui_ai/qwen3.5-abliterated:9b     # or any tool-calling model, e.g. qwen2.5-coder:7b
 git clone https://github.com/shreyshrivastava/agent-ops && cd agent-ops
-pip install .
+pipx install .                                  # or: python3 -m venv .venv && .venv/bin/pip install .
 ```
 
-Try it on one of the included tasks. Copy the task first, because the agent will edit the files:
+On macOS, a plain `pip install .` into the system Python is refused under PEP 668, so use `pipx` or a virtual environment. Start Ollama with the Ollama app. An old Homebrew `ollama serve` may report that the model "does not support tools".
+
+Try it on an included task. Copy it first, because the agent edits files:
 
 ```bash
 cp -r benchmark/tasks/03_webhook_signature /tmp/demo
-agent-ops code "$(cat /tmp/demo/task.txt)" --workspace /tmp/demo
+agent-ops fix --workspace /tmp/demo
 ```
 
-## What you can do with it
+## Commands
 
-Point it at a repository and give it a task in plain English:
-
-```bash
-agent-ops code "refund() lets partial refunds exceed the captured amount. Fix it." --workspace ~/payments-service
-agent-ops code "Add a settlement_report() that totals captured payments by method." --workspace ~/payments-service
-```
-
-### Fix failing tests
-
-`agent-ops fix` runs your tests, hands the failures to the agent, and runs the tests again, for up to 6 rounds. If two rounds in a row don't reduce the number of failing tests, that approach is recorded as failed, its edits are undone (you approve each restore), and the next round must try a different way. It stops when the tests pass or after 3 failed approaches. Test files are read-only in this mode, so the only way to pass is to fix the code.
-
-```bash
-agent-ops fix --workspace ~/payments-service
-agent-ops fix --test-cmd "python3 -m pytest -q" --workspace ~/payments-service
-```
-
-<p align="center">
-  <img src="docs/fix-demo.png" alt="agent-ops fix taking a refund module from 2 failing tests to 0" width="820">
-</p>
-<p align="center"><i>A real run. The agent fixed the refund limit, then added a check for zero and negative amounts. It reused the wrong error message for that check, and the diff prompt shows it before anything is written.</i></p>
-
-I ran `fix` once on each of the 5 bug-fix tasks from the benchmark. Four were fixed in a single round, taking 39 to 124 seconds each. The trace of the fifth is in the next section.
-
-### It remembers what it has done
-
-The agent keeps a plan (a checklist it updates as it works) and a log of every file it changed, with its reason for each change. Both are saved to `.agent-ops/progress.json` after every step. Each `fix` round starts by reading them, and if a `code` run stops at the step limit, running the same command again continues from where it stopped instead of starting over. Pass `--fresh` to start over.
-
-### It tries another way when a fix keeps failing
-
-Inside any run, if the same command (usually your tests) still fails twice after the agent has edited code, the agent stops tweaking that fix. Its edits are undone, the approach is saved as failed with the error it left, and the agent is told to find a different root cause or a different fix. After 3 failed approaches it gives up and tells you, instead of looping. Failed approaches are part of the saved memory, so a later run never repeats them. Tune this with `--retry-limit` and `--max-approaches`.
-
-### Minimal changes, few tokens
-
-- `edit_file` swaps one exact snippet, so the model sends only the lines it changes, not the whole file. `write_file` is meant for new files.
-- An edit that changes more than 40 lines of an existing file is refused, and the agent is told to touch only the lines that are wrong. Change the limit with `--max-diff`, or set it to 0 to turn it off.
-- Old tool output is trimmed after a few steps, so long runs don't resend every file. A file trimmed this way can't be rewritten whole until the agent reads it again.
-
-### It knows what done looks like
-
-Before editing, the agent writes down what "done" means for the task and which command proves it, usually your tests. If it tries to finish while a plan step is still open, or while that command fails, the loop sends it back to work with the reason, until it finishes or runs out of steps. If you decline to run the check command, it can still finish. The done criteria are saved with the rest of its memory.
-
-### Checks before every edit
-
-An edit is written only after it passes these checks, in this order: Python files must still parse, the edit must stay under the line limit, test files stay read-only in `fix`, and you approve the diff and the reason.
-
-### Decision log
-
-`.agent-ops/DECISIONS.md` is a running, human-readable log of what the agent decided and why: each task it started, each change with its reason, decisions it recorded with the `record_decision` tool, abandoned approaches and the error that ended them, and which round fixed the tests. It is kept across tasks and runs. Like the traces, it isn't committed.
-
-### Ask it why
-
-Every write needs a reason, which you see next to the diff before you approve it. At the end of a run the agent explains its work step by step, and you get a numbered list of what changed and why.
-
-`agent-ops explain` walks through code step by step without changing anything (the agent can only read files in this mode). Give it a run name instead of a file to see what that run changed and why, without calling the model:
-
-```bash
-agent-ops explain src/payments/refunds.py --workspace ~/payments-service
-agent-ops explain src/payments/refunds.py --question "why is the captured amount re-read?" --workspace ~/payments-service
-agent-ops explain 20261104-230435-501157 --workspace ~/payments-service
-```
-
-### See what the agent did
-
-Every `code` and `fix` run saves a trace: one line per step, with the model's reply, each tool call and its result. Traces live in `.agent-ops/runs/` inside the workspace. That folder has its own `.gitignore`, so traces are never committed, and the agent can't edit them. Anything that looks like a key or token is masked before it's written.
-
-```bash
-agent-ops runs --workspace ~/payments-service          # list past runs
-agent-ops replay 20261104-230435-501157 --workspace ~/payments-service
-```
-
-That trace shows why `fix` couldn't solve the paise task. The bug was `int(float("0.29") * 100)` returning 28. The model spotted the float error in its first reply. It then tried `round()`, checked `1.005 * 100` by hand, and added an unrelated `if result < 100` check. It never tried `decimal.Decimal`, the usual fix for money in Python. After 15 steps it hit the step limit, and `fix` stopped because the failure count hadn't dropped.
-
-### Options
-
-To see what it would do without letting it change anything, add `--dry-run`. To run it with a different model, use `--model`, for example `--model qwen2.5-coder:7b`. Any Ollama model that supports tool calling works.
+| Command | What it does |
+|---|---|
+| `agent-ops code "<task>" --workspace DIR` | Do a task in plain English: read, edit, run tests, until done |
+| `agent-ops fix --workspace DIR` | Run the tests, fix the code (test files are read-only), rerun, for up to 6 rounds |
+| `agent-ops explain FILE --workspace DIR` | Explain code step by step without changing anything. Add `--question "..."` to ask about something specific |
+| `agent-ops explain RUN --workspace DIR` | Explain what a past run changed and why, from its trace, without calling the model |
+| `agent-ops runs` / `agent-ops replay RUN` | List past runs, or replay one step by step |
+| `agent-ops audit FILE` | Check an agent config for leaked keys and missing approval rules. Exits 1 on a problem, for CI |
 
 | Flag | What it does |
 |---|---|
 | `--dry-run` | Shows the writes and commands it would make, and changes nothing |
-| `--yes` | Approves everything automatically. Only use this on a throwaway copy. |
-| `--max-steps N` | Stops the agent after N steps (default 15) |
+| `--yes` | Approves everything. Use only on a throwaway copy |
 | `--model`, `--host` | Choose the Ollama model and server |
+| `--max-steps N` | Steps per run (default 15) |
+| `--max-diff N` | Most changed lines per edit to an existing file (default 40; 0 turns it off) |
+| `--retry-limit N`, `--max-approaches N` | Failed tries before switching approach (default 2), and approaches before giving up (default 3) |
+| `--fresh` | Ignore saved progress and failed approaches from earlier runs |
 
-The repo also includes `agent-ops audit`, which checks an agent config file for leaked keys and missing approval rules before you share it. [More on that below](#also-included-a-config-auditor).
+## Features
 
-## How it is built
+**Approval and safety**
+- You approve every write (shown as a diff with its reason) and every command.
+- Commands run without a shell, and only `python`, `pytest`, `ls`, `cat`, `grep` and read-only `git` are allowed. Every path must stay inside the workspace.
+- Before a write, Python files must still parse, the edit must stay under the line cap, and test files stay read-only in `fix`.
 
-The whole agent is under 500 lines of standard-library Python, small enough to read in one sitting. The loop is in [`agent.py`](src/local_agent_ops/agent.py), the tools and safety checks are in [`tools.py`](src/local_agent_ops/tools.py), `fix` is in [`fix.py`](src/local_agent_ops/fix.py) and traces are in [`trace.py`](src/local_agent_ops/trace.py).
+**Getting it done**
+- **Completion gate.** The agent writes down what "done" means and which command proves it. It can't finish while plan steps are open or that command fails.
+- **Two strikes.** If the same command keeps failing with no fewer failing tests, the approach is undone (with your approval), recorded as failed, and the agent must try a different way. It gives up after 3 approaches instead of looping.
+- **Memory.** The plan, changes, reasons, done criteria and failed approaches are saved to `.agent-ops/progress.json` after every step. Later rounds and reruns continue from there.
+
+**Minimal changes**
+- `edit_file` swaps one exact snippet, so the model sends only the lines it changes.
+- Edits over 40 changed lines are refused, and old tool output is trimmed to save tokens.
+
+**Audit trail**
+- A trace of every run is kept in `.agent-ops/runs/`, gitignored, with secrets masked.
+- `.agent-ops/DECISIONS.md` is a readable log of each task, change, decision and abandoned approach.
+- `explain` turns a run into a numbered "what changed and why" list.
+
+## How it works
 
 ```text
-task ──► agent loop (agent.py) ──► Ollama /api/chat with tool schemas
+task ──► agent loop (agent.py) ──► Ollama /api/chat with 8 tool schemas
               ▲                         │ tool_calls
               │ tool result             ▼
               └──────────── Workspace (tools.py)
-                            • list_files / read_file      (inside workspace only)
-                            • write_file  → diff → approve → write
-                            • run_command → allowlist → approve → run (120s timeout)
+                            • list_files / read_file             inside the workspace only
+                            • edit_file / write_file  → parse check → line cap → diff + reason → approve
+                            • run_command             → allowlist → approve → run (no shell)
+                            • update_plan / set_done_criteria / record_decision → progress.py
 ```
 
-The loop sends the conversation and four tool definitions to the model, runs whatever tools it asks for, and adds the results to the conversation. It stops when the model replies without asking for a tool, or when it reaches the step limit. If a tool fails, the error goes back to the model as text, so it can try something else.
+The loop sends the conversation and tool definitions to the model, runs the tools it asks for, and adds the results to the conversation. It finishes when the model stops calling tools and the completion gate passes, or when it hits the step limit. `fix.py` wraps the loop in rounds, `progress.py` holds memory and the decision log, and `trace.py` records runs. See [docs/architecture.md](docs/architecture.md).
 
-I made a few deliberate choices:
+## Benchmark
 
-- The model gets four tools: list files, read a file, write a file, run a command. Fewer tools are easier for a 9B model to use correctly.
-- Writes replace the whole file. A small model gets that right more often than search-and-replace edits, and the diff you approve shows exactly what changed. Files over 100,000 characters can't be written, because the agent can only read part of them.
-- Commands run without a shell, so pipes and `&&` can't chain extra commands. Only `python`, `pytest`, `ls`, `cat`, `grep` and read-only `git` are allowed. `git push`, `commit` and `reset` are blocked.
-- Every path, including paths passed to commands, must stay inside the workspace. `cat /etc/passwd` and `git -C /elsewhere` are refused.
-- The system prompt asks the model to read before editing, to reuse existing code or the standard library before writing new code, and to run the tests after each change. That idea comes from the Ponytail agent skill.
-
-## Does it work?
-
-I built a benchmark to find out. It has 8 small payments tasks, each starting with failing tests. Five are bug fixes: paise conversion, GST rounding, webhook signatures, idempotency keys and refund limits. Three are small features: Indian rupee formatting, a settlement report and retrying a gateway timeout.
-
-Each task ran twice with the system prompt above, and twice with a plain "complete the task" prompt as a baseline. Both versions had the same model, tools and step limit. After each run the grader puts the original test files back before running them, so the agent can't pass by editing a test.
+There are 8 small payments tasks, each starting with failing tests. Five are bug fixes: paise conversion, GST rounding, webhook signatures, idempotency keys and refund limits. Three are features: rupee formatting, a settlement report and a gateway retry. Each task runs with the agent's system prompt and with a plain baseline prompt, using the same model, tools and step limit. The grader restores the original tests before grading, so editing a test can't make a task pass.
 
 <p align="center"><img src="docs/benchmark.svg" alt="Benchmark results: minimal-rules vs baseline" width="760"></p>
 
-| | With the system prompt | Baseline |
+All runs used `huihui_ai/qwen3.5-abliterated:9b` (Q4_K_M) on a MacBook.
+
+| Run | System prompt | Baseline |
 |---|---:|---:|
-| Bug fixes passed | 9/10 | 7/10 |
-| Average time per bug fix | 108s | 200s |
-| Feature tasks passed | 3/6 | 3/6 |
-| Average lines changed on features | 19.3 | 23.0 |
+| 2026-11-04, earlier version, 2 runs per task: bug fixes | 9/10 | 7/10 |
+| 2026-11-04, features | 3/6 | 3/6 |
+| 2026-11-26, this version (memory, gate, approach switching), 1 run per task | 6/8 | 6/8 |
 
-The system prompt made the agent more reliable on bug fixes and roughly twice as fast. It didn't make bug fixes smaller, since there was little to cut. On features it wrote about 16% less code at the same pass rate, much less than the 54% Ponytail reports for frontier models.
-
-Every failure happened the same way: the model looped until it hit the step limit. None of the 4 runs got Indian digit grouping (`₹1,23,456.78`) right. There were only two runs per cell, so treat these numbers as rough.
-
-The runs used `huihui_ai/qwen3.5-abliterated:9b` (Q4_K_M) on a MacBook on 2026-11-04. Raw results are in [`results-bugfix.json`](benchmark/results-bugfix.json) and [`results-features.json`](benchmark/results-features.json). Reproducing them takes about an hour:
+On 2026-11-04 the system prompt made bug fixes more reliable and about twice as fast (108s vs 200s on average), and it wrote about 16% less code on features. On 2026-11-26, refund limits and rupee formatting failed in both modes, and they also failed with `agent-ops fix`: the model kept letting zero and negative refunds through, and kept writing `₹0.0` where `₹0.00` was expected. With one or two runs per task, treat these numbers as rough. Raw results: [`results-bugfix.json`](benchmark/results-bugfix.json), [`results-features.json`](benchmark/results-features.json), [`results-real-9b.json`](benchmark/results-real-9b.json).
 
 ```bash
-PYTHONPATH=src python3 benchmark/run.py --runs 2
-PYTHONPATH=src python3 benchmark/run.py --only feature --out results-features.json
+PYTHONPATH=src python3 benchmark/run.py --runs 2      # about an hour; --out is relative to benchmark/
 ```
-
-I reran all 8 tasks on 2026-11-26 with the loop memory, completion gate and approach switching added, once per mode on the same model: 6/8 passed with the system prompt and 6/8 with the baseline ([`results-real-9b.json`](benchmark/results-real-9b.json)). Both modes failed refund limits and rupee formatting again. With `agent-ops fix`, both still failed after 3 approaches: the model kept letting zero and negative refunds through, and kept writing `₹0.0` or `₹00.00` where the tests expect `₹0.00`. Neither task has passed reliably with this model, so treat them as its known limits.
 
 ## Tests
 
@@ -190,23 +141,32 @@ I reran all 8 tasks on 2026-11-26 with the loop memory, completion gate and appr
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The 29 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They check the workspace limits, the command allowlist, rejected writes, dry runs, the truncated-file guard, error recovery and the step limit. They also cover traces, masking, read-only test files, and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
+The 50 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
 
-## Also included: a config auditor
+## Roadmap
 
-`agent-ops audit examples/local-agent.manifest.json` checks an agent config before you share it. It flags missing sections or approval rules, keys that look like secrets at any depth, and values that look like `sk-`, GitHub, Slack, AWS, JWT or `Bearer` tokens. It exits with code 1 when it finds a problem, so you can use it in CI.
+Small changes planned next, each under about 30 lines:
 
-## Who built it, and with what
-
-I built this with Claude Code as a pair programmer. I chose the scope, defined the safety model, wrote the payments tasks, ran all 32 benchmark runs on my own machine, and reviewed the results, including the ones that didn't support the "less code" idea.
-
-A review before release found two bugs. Truncated files could be written back with content missing, and command arguments could reach outside the workspace. I fixed both, with tests, before sharing the project.
+- [ ] `agent-ops review`: a read-only review of `git diff <base>` with numbered findings, for local pre-push review
+- [ ] Use your test command as the completion check in `fix`, even when the model doesn't set one
+- [ ] Refuse an edit that repeats an approach that already failed
+- [ ] `--json` output and exit codes for CI and pre-commit hooks
+- [ ] Publish as `agent-ops` with `pipx` install instructions
+- [ ] Rerun the benchmark with 2 runs per task on this version
 
 ## Limitations
 
-- A 9B local model is much weaker than frontier models. Use the agent for small changes in code that has tests.
+- A 9B local model is much weaker than frontier models. Use agent-ops for small changes in code that has tests. The refund-limit and rupee-formatting tasks are known failures for the default model.
+- The default model rarely calls `set_done_criteria` or `update_plan`, so the completion gate only helps when it does. A fix is on the roadmap.
 - `python` is on the allowlist, so an approved command can run any code. Read each approval prompt, or use `--dry-run`.
-- The default model is an "abliterated" Qwen variant with its refusal behaviour removed. I use it because it was already on my machine, and every benchmark number above comes from it. The agent doesn't rely on the model refusing anything, because the workspace limits, allowlist and approval prompts apply to any model. To use a stock model, pass `--model qwen2.5-coder:7b`.
-- Rewriting whole files is slow on big files.
+- The default model is an "abliterated" Qwen variant with its refusal behaviour removed. The safety limits don't rely on the model refusing anything. To use a stock model, pass `--model qwen2.5-coder:7b`.
 
-See [SECURITY.md](SECURITY.md) and the [architecture notes](docs/architecture.md).
+## Contributing
+
+Issues and pull requests are welcome. Keep to the project's rules: standard library only, minimal changes, and a test for every behaviour change. Run the unit tests before opening a PR. Don't include credentials or private data; see [SECURITY.md](SECURITY.md).
+
+Built with Claude Code as a pair programmer. I chose the scope, defined the safety model, wrote the payments tasks, ran the benchmarks on my own machine, and reviewed the results, including the ones that didn't support the "less code" idea.
+
+## License
+
+[MIT](LICENSE)

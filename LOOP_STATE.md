@@ -81,6 +81,15 @@ minimal changes, and explain step by step what it changed and why.
   same failure) and catching OSError (that would hide a real "Ollama not running" error, which should still exit 2).
   A timed-out round counts as a normal round with no progress, so two of them still trigger an approach switch.
 
+- Niche (2026-11-27 research): agent-ops is the small, auditable local agent: every change has an approved diff, a reason,
+  a trace, a decision log and replay, with zero dependencies and no cloud. Big general agents (Aider, OpenCode, Cline,
+  OpenHands, goose) win on capability and big models, and PR bots (PR-Agent, Kodus) win on hosted review. The gap that
+  sources keep naming is the audit trail for agent changes (who approved what, why, replayable), mostly met by
+  enterprise gateways. Rejected: competing as a general agent (can't beat their models or features) and hash-chained
+  logs (bigger change; listed as a later idea, not a minor fix).
+- Code-reviewer use case: added as `agent-ops review` (plan item 1) by reusing explain's read-only mode, rather than
+  building a PR bot with GitHub API calls, which needs tokens and network and breaks the local-only rule.
+
 ## Findings from real runs (session 4, to fix in step 6)
 
 - F1, 05 `agent-ops fix`: one Ollama call ran past the 600s urllib timeout in round 2. The OSError catch in cli.py `_fix`
@@ -122,11 +131,28 @@ minimal changes, and explain step by step what it changed and why.
 
 ## Next (start here)
 
-Session 5 ideas, none started:
-- F2: get the model to call set_done_criteria/update_plan (for example, have the fix round set the check command itself).
-- F3: stop repeats, for example by refusing an edit whose diff matches an undone approach's diff.
-- Rerun benchmark/run.py with --runs 2 on this branch for numbers comparable to the 2026-11-04 ones.
-- Run benchmark/run.py without `| tail` and with PYTHONUNBUFFERED=1 to see results live.
+Session 5: niche and minor fixes (from the 2026-11-27 research; see Decisions).
+
+Done when:
+- each item below is either done with a test or command that proves it, or moved to Known limitations,
+- `PYTHONPATH=src .venv/bin/python -m unittest discover -s tests` passes,
+- README facts match the code (tool count, test count, line count, install command),
+- committed and pushed to this branch.
+
+Plan (smallest first; each is under 30 lines of code):
+- [ ] 1. `agent-ops review [--base main]`: read-only review of `git diff <base>`. Reuse explain mode's READ_ONLY_TOOLS and
+      EXPLAIN_PROMPT pattern, and pass the diff as the task. Output: numbered findings with file:line and why.
+      This adds the code-reviewer use case without a new loop. Test: fake model, assert no writes and diff in the prompt.
+- [ ] 2. F2: in `fix`, set the check command for the model (workspace.check_command = test_cmd) so the completion gate
+      always has a check, even when the model never calls set_done_criteria. Test: gate blocks finishing while tests fail.
+- [ ] 3. F3: refuse an edit whose new text exactly matches an edit from an undone approach, and tell the model it already
+      failed. Test: repeat edit is refused with that message.
+- [ ] 4. `--json` on `fix`, and `review` exit codes (0 clean, 1 findings), so it can run in CI or a pre-commit hook.
+- [ ] 5. Packaging: rename the dist to `agent-ops` in pyproject.toml, recommend `pipx install .` (system pip is
+      PEP 668-blocked on macOS), set the real author, add CHANGELOG.md and CONTRIBUTING.md.
+- [ ] 6. benchmark/run.py: print the crash text instead of hiding it as tool_calls: 1, and document `--out` as relative
+      to benchmark/.
+- [ ] 7. Rerun benchmark/run.py --runs 2 on this branch so its numbers compare with the 2026-11-04 ones.
 
 ## Session 4 plan (done)
 
