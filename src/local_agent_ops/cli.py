@@ -1,9 +1,10 @@
-"""Command-line interface: `code`, `fix`, `explain`, `runs`, `replay` and `audit`."""
+"""Command-line interface: `code`, `fix`, `explain`, `review`, `runs`, `replay` and `audit`."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from .agent import DEFAULT_HOST, DEFAULT_MODEL, EXPLAIN_PROMPT, MAX_APPROACHES, 
 from .audit import audit_manifest
 from .fix import TEST_FILES, fix_tests
 from .progress import Progress, render_changes
+from .review import review_diff
 from .tools import MAX_DIFF, READ_ONLY_TOOLS, Workspace
 from .trace import Trace, explain_run, find_run, list_runs, load, render
 
@@ -53,6 +55,13 @@ def main(argv: list[str] | None = None) -> int:
     explain.add_argument("--host", default=DEFAULT_HOST)
     explain.add_argument("--max-steps", type=int, default=10)
 
+    review = commands.add_parser("review", help="Review `git diff BASE` without changing anything.")
+    review.add_argument("--base", default="HEAD", help="What to diff against, e.g. main (default: HEAD, uncommitted changes).")
+    review.add_argument("--workspace", type=Path, default=Path("."))
+    review.add_argument("--model", default=DEFAULT_MODEL)
+    review.add_argument("--host", default=DEFAULT_HOST)
+    review.add_argument("--max-steps", type=int, default=10)
+
     runs = commands.add_parser("runs", help="List saved run traces.")
     replay = commands.add_parser("replay", help="Show a saved run step by step.")
     replay.add_argument("run", help="Run name from `agent-ops runs`, or a path to a .jsonl trace.")
@@ -61,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     handlers = {"audit": lambda: _audit(args, parser), "code": lambda: _code(args), "fix": lambda: _fix(args),
-                "explain": lambda: _explain(args),
+                "explain": lambda: _explain(args), "review": lambda: _review(args),
                 "runs": lambda: _runs(args), "replay": lambda: _replay(args)}
     return handlers[args.command]()
 
@@ -118,6 +127,19 @@ def _fix(args: argparse.Namespace) -> int:
     for name in result["traces"]:
         print(f"trace: agent-ops replay {Path(name).stem} --workspace {args.workspace}")
     return 0 if result["passed"] else 1
+
+
+def _review(args: argparse.Namespace) -> int:
+    try:
+        print(review_diff(args.workspace.resolve(), args.base,
+                          ollama_chat(args.model, args.host, READ_ONLY_TOOLS), args.max_steps))
+    except subprocess.CalledProcessError as error:
+        print(f"git diff {args.base} failed: {(error.stderr.strip().splitlines() or ['?'])[0]}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"Cannot reach Ollama at {args.host}: {error}", file=sys.stderr)
+        return 2
+    return 0
 
 
 def _explain(args: argparse.Namespace) -> int:

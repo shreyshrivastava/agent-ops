@@ -18,7 +18,8 @@ memory; this file is.
   - `progress.py`: loop memory in `<workspace>/.agent-ops/progress.json` and the decision log
     `<workspace>/.agent-ops/DECISIONS.md`.
   - `fix.py`: the `agent-ops fix` rounds. They switch approach after 2 rounds without progress and give up after 3 approaches.
-  - `cli.py`: the commands `code`, `fix`, `explain`, `runs`, `replay` and `audit`.
+  - `cli.py`: the commands `code`, `fix`, `explain`, `review`, `runs`, `replay` and `audit`.
+  - `review.py`: `agent-ops review`, a read-only review of `git diff <base>` (explain's read-only tools, its own prompt).
   - `trace.py`: run traces in `.agent-ops/runs/`, and `explain_run`.
 - Tests: `tests/` (47 tests, using a scripted fake model). Run them with `PYTHONPATH=src python3 -m unittest discover -s tests`
 - Benchmark: `benchmark/tasks/01..08` (5 bug fixes, 3 features), `benchmark/run.py`, and the earlier results in
@@ -123,7 +124,7 @@ minimal changes, and explain step by step what it changed and why.
 
 ## Results
 
-- Fake-model unit tests: 50/50 pass (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
+- Fake-model unit tests: 52/52 pass (2 review tests added in session 5); before that 50/50 (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
 - Real model (session 4, huihui_ai/qwen3.5-abliterated:9b, Ollama app 0.40.16, benchmark/run.py, 1 run per mode):
   minimal-rules 6/8 (avg 12.9 net lines, 9.6 calls, 91s), baseline 6/8 (9.2 lines, 10.6 calls, 108s).
   Both modes fail 05_partial_refunds and 06_feature_inr_format. In 06, baseline made no edits at all, so its
@@ -140,7 +141,9 @@ Done when:
 - committed and pushed to this branch.
 
 Plan (smallest first; each is under 30 lines of code):
-- [ ] 1. `agent-ops review [--base main]`: read-only review of `git diff <base>`. Reuse explain mode's READ_ONLY_TOOLS and
+- [x] 1. (2026-11-27: done. src/local_agent_ops/review.py, 27 lines, plus a `review` subcommand in cli.py. tests/test_review.py: diff passed as task, no
+      writes, empty diff skips the model. Suite 52/52 OK. Real model: caught a removed refund-limit check in 29s with a correct
+      150-vs-100 example; its second finding was padding. Bad base or not a git repo: one-line error, exit 1.) `agent-ops review [--base main]`: read-only review of `git diff <base>`. Reuse explain mode's READ_ONLY_TOOLS and
       EXPLAIN_PROMPT pattern, and pass the diff as the task. Output: numbered findings with file:line and why.
       This adds the code-reviewer use case without a new loop. Test: fake model, assert no writes and diff in the prompt.
 - [ ] 2. F2: in `fix`, set the check command for the model (workspace.check_command = test_cmd) so the completion gate
