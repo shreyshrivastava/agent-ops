@@ -46,6 +46,7 @@ def fix_tests(workspace: Workspace, chat: Chat, test_cmd: str = "python3 -m unit
     progress = Progress(workspace.root)
     if progress.begin(f"fix: {test_cmd}", fresh=fresh):  # memory is kept across runs unless fresh
         log(f"resuming: {len(progress.changes)} earlier changes, {len(progress.failed)} failed approaches")
+    progress.check_command = progress.check_command or test_cmd  # the gate always has a check, even if the model sets none
     best, stuck, attempt_start = failing, 0, 0
 
     for number in range(1, rounds + 1):

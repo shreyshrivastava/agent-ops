@@ -107,6 +107,12 @@ class FixTests(unittest.TestCase):
         self.assertTrue(result["passed"])
         self.assertEqual(len(result["traces"]), 2)
 
+    def test_test_command_is_the_done_check_even_if_the_model_sets_none(self) -> None:
+        replies = [_done("done"), _call("write_file", path="calc.py", content=FIXED), _done()]
+        result = fix_tests(self._workspace(), lambda m: replies.pop(0), log=lambda _: None)
+        self.assertTrue(result["passed"])
+        self.assertEqual(len(result["traces"]), 1)  # the gate sent it back inside round 1, no second round needed
+
     def test_test_files_are_read_only(self) -> None:
         result = self._workspace().write_file("test_calc.py", "")
         self.assertIn("read-only", result)

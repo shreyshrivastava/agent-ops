@@ -119,12 +119,12 @@ minimal changes, and explain step by step what it changed and why.
 
 - huihui_ai/qwen3.5-abliterated:9b doesn't pass 05_partial_refunds (1/7 runs ever) or 06_feature_inr_format (0/7): it lets
   non-positive refunds through and gets the decimal part of rupee formatting wrong. This is the model, not the agent loop.
-- The model never calls update_plan or set_done_criteria (F2), so the completion gate only adds value when it does. Not fixed.
+- The model never calls update_plan or set_done_criteria (F2). `fix` now gives the gate the test command anyway (session 5); `code` runs still depend on the model setting one.
 - F3 (the model repeats a recorded failed approach) is not fixed by prompting yet.
 
 ## Results
 
-- Fake-model unit tests: 52/52 pass (2 review tests added in session 5); before that 50/50 (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
+- Fake-model unit tests: 53/53 pass (2 review tests and 1 gate test added in session 5); before that 50/50 (3 new tests in session 4: timeout, progress-not-strike, stop on give-up).
 - Real model (session 4, huihui_ai/qwen3.5-abliterated:9b, Ollama app 0.40.16, benchmark/run.py, 1 run per mode):
   minimal-rules 6/8 (avg 12.9 net lines, 9.6 calls, 91s), baseline 6/8 (9.2 lines, 10.6 calls, 108s).
   Both modes fail 05_partial_refunds and 06_feature_inr_format. In 06, baseline made no edits at all, so its
@@ -146,7 +146,11 @@ Plan (smallest first; each is under 30 lines of code):
       150-vs-100 example; its second finding was padding. Bad base or not a git repo: one-line error, exit 1.) `agent-ops review [--base main]`: read-only review of `git diff <base>`. Reuse explain mode's READ_ONLY_TOOLS and
       EXPLAIN_PROMPT pattern, and pass the diff as the task. Output: numbered findings with file:line and why.
       This adds the code-reviewer use case without a new loop. Test: fake model, assert no writes and diff in the prompt.
-- [ ] 2. F2: in `fix`, set the check command for the model (workspace.check_command = test_cmd) so the completion gate
+- [x] 2. (2026-11-27: done. fix.py sets progress.check_command = test_cmd unless the model set one. Test
+      test_test_command_is_the_done_check_even_if_the_model_sets_none: failed before with 2 != 1, passes now; suite 53/53 OK.
+      Real 05 rerun: PASS in round 1, 2 → 0, +4 -2, correct code, graded with the original tests. The gate never fired
+      (no 'not done yet'), so this pass is not evidence for the change: one sample of a task that passed 1 of 7 before.)
+      F2: in `fix`, set the check command for the model (workspace.check_command = test_cmd) so the completion gate
       always has a check, even when the model never calls set_done_criteria. Test: gate blocks finishing while tests fail.
 - [ ] 3. F3: refuse an edit whose new text exactly matches an edit from an undone approach, and tell the model it already
       failed. Test: repeat edit is refused with that message.

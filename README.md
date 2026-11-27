@@ -142,14 +142,14 @@ PYTHONPATH=src python3 benchmark/run.py --runs 2      # about an hour; --out is 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The 52 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
+The 53 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
 
 ## Roadmap
 
 Small changes planned next, each under about 30 lines:
 
 - [x] `agent-ops review`: a read-only review of `git diff <base>` with numbered findings, for local pre-push review
-- [ ] Use your test command as the completion check in `fix`, even when the model doesn't set one
+- [x] Use your test command as the completion check in `fix`, even when the model doesn't set one
 - [ ] Refuse an edit that repeats an approach that already failed
 - [ ] `--json` output and exit codes for CI and pre-commit hooks
 - [ ] Publish as `agent-ops` with `pipx` install instructions
@@ -158,7 +158,7 @@ Small changes planned next, each under about 30 lines:
 ## Limitations
 
 - A 9B local model is much weaker than frontier models. Use agent-ops for small changes in code that has tests. The refund-limit and rupee-formatting tasks are known failures for the default model.
-- The default model rarely calls `set_done_criteria` or `update_plan`, so the completion gate only helps when it does. A fix is on the roadmap.
+- The default model rarely calls `set_done_criteria` or `update_plan`. In `fix`, the gate uses your test command anyway; in `code`, it only helps when the model sets a check.
 - `python` is on the allowlist, so an approved command can run any code. Read each approval prompt, or use `--dry-run`.
 - The default model is an "abliterated" Qwen variant with its refusal behaviour removed. The safety limits don't rely on the model refusing anything. To use a stock model, pass `--model qwen2.5-coder:7b`.
 
