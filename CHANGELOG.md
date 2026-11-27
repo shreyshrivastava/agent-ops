@@ -21,6 +21,7 @@ All notable changes to agent-ops. The format follows [Keep a Changelog](https://
 ### Fixed
 - One slow model reply no longer ends the whole `fix` run. Only that round ends.
 - `fix` stops as soon as the agent gives up within a round, instead of running past the approach limit.
+- The benchmark runner reports why a run crashed (an `error` field), instead of showing it only as one tool call.
 
 ## [0.2.0] - 2026-11-04
 

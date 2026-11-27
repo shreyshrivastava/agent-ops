@@ -169,7 +169,9 @@ Plan (smallest first; each is under 30 lines of code):
       CONTRIBUTING.md; .gitignore now ignores build/ and *.egg-info/. A fresh install shows agent-ops 0.3.0 and the CLI
       works; suite 56/56 OK. Not published to PyPI; the name isn't checked there.) Packaging: rename the dist to `agent-ops` in pyproject.toml, recommend `pipx install .` (system pip is
       PEP 668-blocked on macOS), set the real author, add CHANGELOG.md and CONTRIBUTING.md.
-- [ ] 6. benchmark/run.py: print the crash text instead of hiding it as tool_calls: 1, and document `--out` as relative
+- [x] 6. (2026-11-27: done. run_task returns "error" with the exception type and text, and a crash is no longer
+      counted as a tool call. --out help says it is saved inside benchmark/. New tests/test_benchmark.py failed before
+      with KeyError, passes now; suite 57/57 OK.) benchmark/run.py: print the crash text instead of hiding it as tool_calls: 1, and document `--out` as relative
       to benchmark/.
 - [ ] 7. Rerun benchmark/run.py --runs 2 on this branch so its numbers compare with the 2026-11-04 ones.
 

@@ -33,18 +33,18 @@ def run_task(task_dir: Path, system: str, model: str) -> dict:
         shutil.copytree(task_dir, work, ignore=shutil.ignore_patterns("task.txt", "__pycache__"))
         workspace = Workspace(work, approve=lambda _: True)
         calls: list[str] = []
-        start = time.monotonic()
+        start, crash = time.monotonic(), ""
         try:
             run_agent((task_dir / "task.txt").read_text(), workspace, ollama_chat(model), log=calls.append, system=system)
         except Exception as error:  # a crashed run counts as a failure, not a crashed benchmark
-            calls.append(f"crash: {error}")
+            crash = f"{type(error).__name__}: {error}"
         seconds = time.monotonic() - start
         added, removed = workspace.net_lines()
         for test in task_dir.glob("test_*.py"):
             shutil.copy(test, work / test.name)
         graded = subprocess.run([sys.executable, "-m", "unittest"], cwd=work, capture_output=True, timeout=60)
         return {"passed": graded.returncode == 0, "added": added, "removed": removed,
-                "tool_calls": len(calls), "seconds": round(seconds, 1)}
+                "tool_calls": len(calls), "seconds": round(seconds, 1), "error": crash}
 
 
 def main() -> None:
@@ -52,7 +52,7 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--only", default="", help="Run only tasks whose name contains this text, e.g. 'feature'.")
-    parser.add_argument("--out", default="results.json")
+    parser.add_argument("--out", default="results.json", help="File name, saved inside benchmark/.")
     args = parser.parse_args()
 
     results = []

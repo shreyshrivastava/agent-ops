@@ -142,7 +142,7 @@ PYTHONPATH=src python3 benchmark/run.py --runs 2      # about an hour; --out is 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The 56 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
+The 57 unit tests replace the model with scripted replies, so they run anywhere without a GPU. They cover the workspace limits, the command allowlist, the checks before writes, memory, the completion gate, approach switching, model timeouts, read-only review, traces, masking and each way `fix` can stop. GitHub Actions runs them on Python 3.10 and 3.12.
 
 ## Roadmap
 
