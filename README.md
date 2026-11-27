@@ -129,11 +129,12 @@ All runs used `huihui_ai/qwen3.5-abliterated:9b` (Q4_K_M) on a MacBook.
 | 2026-11-04, earlier version, 2 runs per task: bug fixes | 9/10 | 7/10 |
 | 2026-11-04, features | 3/6 | 3/6 |
 | 2026-11-26, this version (memory, gate, approach switching), 1 run per task | 6/8 | 6/8 |
+| 2026-11-27, v0.3.0, 2 runs per task, all 8 tasks | 9/16 | 10/16 |
 
-On 2026-11-04 the system prompt made bug fixes more reliable and about twice as fast (108s vs 200s on average), and it wrote about 16% less code on features. On 2026-11-26, refund limits and rupee formatting failed in both modes, and they also failed with `agent-ops fix`: the model kept letting zero and negative refunds through, and kept writing `₹0.0` where `₹0.00` was expected. With one or two runs per task, treat these numbers as rough. Raw results: [`results-bugfix.json`](benchmark/results-bugfix.json), [`results-features.json`](benchmark/results-features.json), [`results-real-9b.json`](benchmark/results-real-9b.json).
+On 2026-11-04 the system prompt made bug fixes more reliable and about twice as fast (108s vs 200s on average), and it wrote about 16% less code on features. In the 2026-11-27 rerun, the system prompt was no better than the baseline (9/16 vs 10/16). The drop from 12/16 came from two tasks: paise conversion failed both times with the system prompt after passing every earlier run, and gateway retry failed in every run. Refund limits and rupee formatting still fail with this model in both modes. Two runs (one per mode) ended in model timeouts. With so few runs per task, treat these numbers as rough. Raw results: [`results-bugfix.json`](benchmark/results-bugfix.json), [`results-features.json`](benchmark/results-features.json), [`results-real-9b.json`](benchmark/results-real-9b.json), [`results-v0.3-9b.json`](benchmark/results-v0.3-9b.json).
 
 ```bash
-PYTHONPATH=src python3 benchmark/run.py --runs 2      # about an hour; --out is relative to benchmark/
+PYTHONPATH=src python3 benchmark/run.py --runs 2      # about 2.5 hours on a MacBook; --out is relative to benchmark/
 ```
 
 ## Tests
@@ -153,7 +154,8 @@ Small changes planned next, each under about 30 lines:
 - [x] Refuse an edit that repeats an approach that already failed
 - [x] `--json` output and exit codes for CI and pre-commit hooks
 - [x] Package as `agent-ops` with `pipx` install instructions (not on PyPI yet)
-- [ ] Rerun the benchmark with 2 runs per task on this version
+- [x] Rerun the benchmark with 2 runs per task on this version
+- [ ] Find out why paise conversion now fails with the system prompt
 
 ## Limitations
 

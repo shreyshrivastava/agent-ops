@@ -173,7 +173,12 @@ Plan (smallest first; each is under 30 lines of code):
       counted as a tool call. --out help says it is saved inside benchmark/. New tests/test_benchmark.py failed before
       with KeyError, passes now; suite 57/57 OK.) benchmark/run.py: print the crash text instead of hiding it as tool_calls: 1, and document `--out` as relative
       to benchmark/.
-- [ ] 7. Rerun benchmark/run.py --runs 2 on this branch so its numbers compare with the 2026-11-04 ones.
+- [x] 7. (2026-11-27: done, 32 runs, benchmark/results-v0.3-9b.json. System prompt 9/16 (was 12/16 on 2026-11-04),
+      baseline 10/16 (was 10/16). The whole drop is in system-prompt mode: paise conversion went from 2/2 to 0/2 and gateway
+      retry from 1/2 to 0/2; everything else matched. One crash per mode, both TimeoutError (the benchmark calls run_agent
+      directly, so the fix-level timeout handling doesn't apply). Cause of the paise regression not investigated; one
+      guess is the longer system prompt (plan, done criteria, decisions) confusing the 9b model. Next: look at a failing
+      paise run's trace before changing anything.) Rerun benchmark/run.py --runs 2 on this branch so its numbers compare with the 2026-11-04 ones.
 
 ## Session 4 plan (done)
 
