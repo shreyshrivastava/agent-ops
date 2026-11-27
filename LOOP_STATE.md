@@ -164,7 +164,10 @@ Plan (smallest first; each is under 30 lines of code):
       Tests mock ollama_chat: test_fix_json_prints_only_the_result_on_stdout, test_exit_codes_say_whether_there_are_findings;
       both failed before; suite 56/56 OK. Shortcut: review's all-clear relies on the exact "No problems found." wording.)
       `--json` on `fix`, and `review` exit codes (0 clean, 1 findings), so it can run in CI or a pre-commit hook.
-- [ ] 5. Packaging: rename the dist to `agent-ops` in pyproject.toml, recommend `pipx install .` (system pip is
+- [x] 5. (2026-11-27: done. pyproject: name agent-ops, version 0.3.0, new description, author shreyshrivastava
+      (the GitHub handle; git shows only "shrey.s", so no full name was guessed). Added CHANGELOG.md (from git history) and
+      CONTRIBUTING.md; .gitignore now ignores build/ and *.egg-info/. A fresh install shows agent-ops 0.3.0 and the CLI
+      works; suite 56/56 OK. Not published to PyPI; the name isn't checked there.) Packaging: rename the dist to `agent-ops` in pyproject.toml, recommend `pipx install .` (system pip is
       PEP 668-blocked on macOS), set the real author, add CHANGELOG.md and CONTRIBUTING.md.
 - [ ] 6. benchmark/run.py: print the crash text instead of hiding it as tool_calls: 1, and document `--out` as relative
       to benchmark/.

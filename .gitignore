@@ -10,3 +10,5 @@ coverage.xml
 .DS_Store
 benchmark/last-run*.log
 .agent-ops/
+build/
+*.egg-info/

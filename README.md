@@ -152,7 +152,7 @@ Small changes planned next, each under about 30 lines:
 - [x] Use your test command as the completion check in `fix`, even when the model doesn't set one
 - [x] Refuse an edit that repeats an approach that already failed
 - [x] `--json` output and exit codes for CI and pre-commit hooks
-- [ ] Publish as `agent-ops` with `pipx` install instructions
+- [x] Package as `agent-ops` with `pipx` install instructions (not on PyPI yet)
 - [ ] Rerun the benchmark with 2 runs per task on this version
 
 ## Limitations
@@ -164,7 +164,7 @@ Small changes planned next, each under about 30 lines:
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep to the project's rules: standard library only, minimal changes, and a test for every behaviour change. Run the unit tests before opening a PR. Don't include credentials or private data; see [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the rules (standard library only, minimal changes, a test for every behaviour change) and [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 Built with Claude Code as a pair programmer. I chose the scope, defined the safety model, wrote the payments tasks, ran the benchmarks on my own machine, and reviewed the results, including the ones that didn't support the "less code" idea.
 

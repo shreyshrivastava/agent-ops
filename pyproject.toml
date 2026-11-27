@@ -3,13 +3,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "local-agent-operations-toolkit"
-version = "0.2.0"
-description = "A fully local, approval-gated coding agent (Ollama) that writes the least code needed, plus a manifest auditor."
+name = "agent-ops"
+version = "0.3.0"
+description = "The auditable local coding agent: approval-gated fixes and reviews with a local Ollama model, and a replayable record of every change."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [{name = "Project Contributors"}]
+authors = [{name = "shreyshrivastava"}]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
